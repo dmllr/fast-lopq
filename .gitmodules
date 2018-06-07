@@ -1,3 +1,7 @@
 [submodule "ext/blaze"]
 	path = ext/blaze
 	url = https://bitbucket.org/blaze-lib/blaze.git
+[submodule "ext/protobuf"]
+	path = ext/protobuf
+	url = https://github.com/google/protobuf.git
+	branch = 3.6.x
