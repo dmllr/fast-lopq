@@ -4,4 +4,5 @@ add_library(fast-lopq
 
 target_link_libraries(fast-lopq
     ext-blaze
+    libprotobuf
 )
