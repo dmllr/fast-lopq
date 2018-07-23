@@ -8,6 +8,7 @@
 #include <blaze/Math.h>
 #include <unordered_map>
 
+
 namespace lopq {
 
 struct Searcher {

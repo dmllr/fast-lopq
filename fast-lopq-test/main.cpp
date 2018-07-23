@@ -124,10 +124,13 @@ int main(int argc, char **argv) {
 	std::cout << " * searching...\n";
 	auto t0 = std::chrono::steady_clock::now();
 
-	searcher.search(x);
+	auto results = searcher.search(x);
 
 	auto t1 = std::chrono::steady_clock::now();
-	std::cout << "    - got result in " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << " ms\n";
+	std::cout << "    - got result in " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << '\n';
+
+	for (auto& r: results)
+		std::cout << "      - " << r.id << " ms\n";
 
 	one_cell_of_index.reset();
 

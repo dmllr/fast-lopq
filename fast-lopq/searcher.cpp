@@ -28,21 +28,21 @@ float Searcher::distance(const Model::FeatureVector& x, blaze::StaticVector<uint
 		d1 = model.subquantizer_distances(x, coarse_code, 1);
 
 	uint32_t c = 0;
-	std::for_each(fine_code.begin(), fine_code.end(), [&](auto& e) {
+	for (auto& e: fine_code) {
 		D += (c < d0s) ? d0[c][e] : d1[c - d0s][e];
 		c++;
-	});
+	};
 
 	return D;
 }
 
-std::vector<Searcher::Response> Searcher::search(const Model::FeatureVector& x)  {
+std::vector<Searcher::Response> Searcher::search(const Model::FeatureVector& x) {
 	auto const coarse_code = model.predict_coarse(x);
 
 	return search_in(coarse_code, x);
 }
 
-std::vector<Searcher::Response> Searcher::search_in(const Model::CoarseCode& coarse_code, const Model::FeatureVector& x)  {
+std::vector<Searcher::Response> Searcher::search_in(const Model::CoarseCode& coarse_code, const Model::FeatureVector& x) {
 	auto& index = get_cell(coarse_code);
 	auto& index_codes = index.vectors;
 
@@ -57,11 +57,11 @@ std::vector<Searcher::Response> Searcher::search_in(const Model::CoarseCode& coa
 
 	// calculate relative distances for all vectors in cluster
 	uint32_t c = 0;
-	std::for_each(distances.begin(), distances.end(), [&](auto& e) {
+	for (auto& e: distances) {
 		e.first = c;
 		e.second = distance(x, coarse_code, index_codes[c], distance_cache);
 		c++;
-	});
+	};
 
 	// take top N
 	std::partial_sort(
