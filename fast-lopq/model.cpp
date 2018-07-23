@@ -32,9 +32,7 @@ uint8_t predict_cluster(const blaze::DynamicVector<double>& x, const blaze::Dyna
 namespace lopq {
 
 void Model::load(const std::string& proto_path) {
-	namespace lopq = com::flickr::vision::lopq;
-
-	lopq::LOPQModelParams lopq_params;
+	com::flickr::vision::lopq::LOPQModelParams lopq_params;
 
 	std::ifstream proto_stream(proto_path);
 	lopq_params.ParseFromIstream(&proto_stream);
