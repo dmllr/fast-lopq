@@ -186,4 +186,4 @@ blaze::DynamicVector<Model::FloatVector> Model::subquantizer_distances(const Fea
 	return distances;
 }
 
-}
+} // lopq
