@@ -5,6 +5,7 @@
 #include <cstdint>
 #include "../../../ext/blaze/blaze/Math.h"
 
+
 namespace lopq {
 
 struct Model final {
