@@ -1,7 +1,5 @@
-set(generated-lopq_model "${CMAKE_CURRENT_BINARY_DIR}/lopq_model.pb.cc")
-
 add_library(fast-lopq
-    ${generated-lopq_model}
+    "${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/lopq_model.pb.cc"
 
     model.cpp
     searcher.cpp
@@ -11,9 +9,10 @@ add_library(fast-lopq
 )
 
 add_custom_command(
-    OUTPUT ${generated-lopq_model}
-    COMMAND protoc -I ../proto --cpp_out="${CMAKE_CURRENT_BINARY_DIR}" lopq_model.proto
-    COMMENT "Run protoc to generate lopq model source in ${CMAKE_CURRENT_BINARY_DIR}"
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/lopq_model.pb.cc"
+    COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}"
+    COMMAND protoc -I ../proto --cpp_out="${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}" lopq_model.proto
+    COMMENT "Run protoc to generate lopq model source in ${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
@@ -25,5 +24,5 @@ target_link_libraries(fast-lopq
 target_include_directories(fast-lopq
     PUBLIC "include"
     PRIVATE "include/fast-lopq"
-    PRIVATE "${CMAKE_CURRENT_BINARY_DIR}"
+    PRIVATE "${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}"
 )

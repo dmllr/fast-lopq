@@ -58,9 +58,8 @@ std::vector<Searcher::Response> Searcher::search_in(const Model::CoarseCode& coa
 	// calculate relative distances for all vectors in cluster
 	uint32_t c = 0;
 	for (auto& e: distances) {
-		e.first = c;
 		e.second = distance(x, coarse_code, index_codes[c], distance_cache);
-		c++;
+		e.first = c++;
 	};
 
 	// take top N
