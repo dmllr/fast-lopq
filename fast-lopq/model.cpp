@@ -12,6 +12,24 @@
 
 namespace {
 
+template <class T>
+void log1dc(std::string name, const T* x) {
+	std::cout << name << "\n";
+	for (int i = 0; i < 4; ++i)
+		std::cout << x[i] << ' ';
+	std::cout << '\n';
+}
+
+void log2dc(std::string name, const float* x, int d) {
+	std::cout << name << "\n";
+	for (int i = 0; i < 4; ++i) {
+		for (int j = 0; j < 4; ++j)
+			std::cout << x[i * d + j] << ' ';
+		std::cout << '\n';
+	}
+	std::cout << '\n';
+}
+
 uint8_t predict_cluster(const blaze::DynamicVector<double>& x, const blaze::DynamicMatrix<float>& centroids) {
 	blaze::DynamicVector<double, blaze::rowVector> tx = blaze::trans(x);
 	blaze::DynamicMatrix<float> cx(centroids);

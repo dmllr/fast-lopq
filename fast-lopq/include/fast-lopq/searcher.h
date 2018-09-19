@@ -12,7 +12,7 @@
 namespace lopq {
 
 struct Searcher {
-	static inline uint32_t quota = 12;
+//	static inline uint32_t quota = 12;
 
 	struct Cluster final {
 		std::vector<std::string> ids;
@@ -20,9 +20,9 @@ struct Searcher {
 	};
 
 	struct Response final {
-		Response(std::string_view id)
-				: id(id) {
-		}
+//		Response(std::string_view id)
+//				: id(id) {
+//		}
 
 		std::string id;
 	};

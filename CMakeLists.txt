@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.9)
-project(fast-lopq)
+
+set(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc")
+
+project(fast-lopq LANGUAGES C CXX CUDA)
 
 set(CMAKE_DISABLE_SOURCE_CHANGES ON)
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
@@ -19,7 +22,6 @@ include("cmake/ext-protobuf.cmake")
 
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -W -Wall -Wextra")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -W -Wall -Wextra")
-
 
 add_subdirectory("fast-lopq")
 add_subdirectory("fast-lopq-test")

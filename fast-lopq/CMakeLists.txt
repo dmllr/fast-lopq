@@ -2,10 +2,12 @@ add_library(fast-lopq
     "${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/lopq_model.pb.cc"
 
     model.cpp
-    searcher.cpp
+    model.cu
+#    searcher.cpp
 
     include/fast-lopq/model.h
-    include/fast-lopq/searcher.h
+    include/fast-lopq/model.cuh
+#    include/fast-lopq/searcher.h
 )
 
 add_custom_command(
@@ -19,10 +21,19 @@ add_custom_command(
 target_link_libraries(fast-lopq
     ext-blaze
     libprotobuf
+    cublas
 )
 
 target_include_directories(fast-lopq
     PUBLIC "include"
     PRIVATE "include/fast-lopq"
     PRIVATE "${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}"
+)
+
+target_compile_features(fast-lopq
+    PUBLIC cxx_std_14
+)
+
+set_target_properties(fast-lopq
+    PROPERTIES CUDA_SEPARABLE_COMPILATION ON
 )
