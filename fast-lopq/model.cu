@@ -91,24 +91,24 @@ void Model::load(const std::string& proto_path) {
 
 	//TODO Check for cuda/cublas response statuses
 
+	num_clusters = lopq_params.cs(0).shape(0);
+
 	Cs = new scalar_t*[num_coarse_splits];
-	Cszs = new Size[num_coarse_splits];
 	for (uint32_t ci = 0; ci < num_coarse_splits; ++ci) {
 		const auto& cs = lopq_params.cs(ci);
-		Cszs[ci].h = cs.shape(0);
-		Cszs[ci].w = cs.shape(1);
-		auto& sz = Cszs[ci];
+		auto h = cs.shape(0);
+		auto w = cs.shape(1);
 
-		std::cout << "Cs[" << ci << "]: " << sz.h << "x" << sz.w << '\n';
+		std::cout << "Cs[" << ci << "]: " << h << "x" << w << '\n';
 
-		scalar_t C[sz.w * sz.h];
-		for (uint32_t i = 0; i < sz.h; ++i)
-			for (uint32_t j = 0; j < sz.w; ++j)
-				C[IDX(i, j, sz.h)] = cs.values(i * sz.w + j);
+		scalar_t C[w * h];
+		for (uint32_t i = 0; i < h; ++i)
+			for (uint32_t j = 0; j < w; ++j)
+				C[IDX(i, j, h)] = cs.values(i * w + j);
 
-		cudaMalloc((void**)&Cs[ci], sz.w * sz.h * sizeof(scalar_t));
-		cudaMemset(Cs[ci], FINITIALIZER, sz.h * sz.w * sizeof(scalar_t));
-		cudaMemcpy(Cs[ci], C, sz.h * sz.w * sizeof(scalar_t), cudaMemcpyHostToDevice);
+		cudaMalloc((void**)&Cs[ci], w * h * sizeof(scalar_t));
+		cudaMemset(Cs[ci], FINITIALIZER, h * w * sizeof(scalar_t));
+		cudaMemcpy(Cs[ci], C, h * w * sizeof(scalar_t), cudaMemcpyHostToDevice);
 	}
 
 	Rs = new scalar_t**[2];
@@ -119,22 +119,21 @@ void Model::load(const std::string& proto_path) {
 	for (uint32_t c = 0; c < rs_size; ++c) {
 		const auto& rs = lopq_params.rs(c);
 
-		Size sz;
-		sz.h = rs.shape(0);
-		sz.w = rs.shape(1);
+		auto h = rs.shape(0);
+		auto w = rs.shape(1);
 		if (c % rs_half == 0)
 			std::cout << '\n';
-		std::cout << "\rRs[" << c / rs_half << ", " << c % rs_half << "]: " << sz.h << "x" << sz.w;
+		std::cout << "\rRs[" << c / rs_half << ", " << c % rs_half << "]: " << h << "x" << w;
 
-		scalar_t R[sz.w * sz.h];
-		for (uint32_t i = 0; i < sz.h; ++i) {
-			for (uint32_t j = 0; j < sz.w; ++j)
-				R[IDX(i, j, sz.h)] = rs.values(i * sz.w + j);
+		scalar_t R[w * h];
+		for (uint32_t i = 0; i < h; ++i) {
+			for (uint32_t j = 0; j < w; ++j)
+				R[IDX(i, j, h)] = rs.values(i * w + j);
 		}
 
 		auto& R_ = Rs[c / rs_half][c % rs_half];
-		cudaMalloc((void**)&R_, sz.w * sz.h * sizeof(*R_));
-		cublasSetMatrix(sz.w, sz.h, sizeof(scalar_t), R, sz.w, R_, sz.w);
+		cudaMalloc((void**)&R_, w * h * sizeof(*R_));
+		cublasSetMatrix(w, h, sizeof(scalar_t), R, w, R_, w);
 	}
 	std::cout << '\n';
 
@@ -171,22 +170,21 @@ void Model::load(const std::string& proto_path) {
 	for (uint32_t c = 0; c < subs_size; ++c) {
 		const auto& subs = lopq_params.subs(c);
 
-		Size sz;
-		sz.h = subs.shape(0);
-		sz.w = subs.shape(1);
+		auto h = subs.shape(0);
+		auto w = subs.shape(1);
 		if (c % subs_half == 0)
 			std::cout << '\n';
-		std::cout << "\rsubquantizers[" << c / subs_half << ", " << c % subs_half << "]: " << sz.h << "x" << sz.w;
+		std::cout << "\rsubquantizers[" << c / subs_half << ", " << c % subs_half << "]: " << h << "x" << w;
 
-		scalar_t S[sz.w * sz.h];
-		for (uint32_t i = 0; i < sz.h; ++i) {
-			for (uint32_t j = 0; j < sz.w; ++j)
-				S[IDX(i, j, sz.h)] = subs.values(i * sz.w + j);
+		scalar_t S[w * h];
+		for (uint32_t i = 0; i < h; ++i) {
+			for (uint32_t j = 0; j < w; ++j)
+				S[IDX(i, j, h)] = subs.values(i * w + j);
 		}
 
 		auto& S_ = subquantizers[c / subs_half][c % subs_half];
-		cudaMalloc((void**)&S_, sz.w * sz.h * sizeof(*S_));
-		cublasSetMatrix(sz.w, sz.h, sizeof(scalar_t), S, sz.w, S_, sz.w);
+		cudaMalloc((void**)&S_, w * h * sizeof(*S_));
+		cublasSetMatrix(w, h, sizeof(scalar_t), S, w, S_, w);
 	}
 	std::cout << '\n';
 }
@@ -200,7 +198,7 @@ Model::Codes Model::predict_coarse(const scalar_t* x, const uint32_t sz) const {
 
 	uint32_t split_size = sz / num_coarse_splits;
 	for (uint32_t split = 0; split < num_coarse_splits; ++split)
-		coarse.codes[split] = predict_cluster(&x_[split * split_size], split_size, Cs[split], Cszs[split].h);
+		coarse[split] = predict_cluster(&x_[split * split_size], split_size, Cs[split], num_clusters);
 
 	return coarse;
 }
@@ -219,15 +217,15 @@ Model::Codes Model::predict_fine(const scalar_t* x, const uint32_t sz, const Mod
 		// Compute subquantizer codes
 		uint32_t subsplit_size = split_size / num_fine_splits;
 		for (uint32_t subsplit = 0; subsplit < num_fine_splits; ++subsplit) {
-			fine.codes[split * num_fine_splits + subsplit] = predict_cluster(&px_.x[split * split_size + subsplit * subsplit_size], subsplit_size, subquantizers[split][subsplit], Cszs[split].h);
+			fine[split * num_fine_splits + subsplit] = predict_cluster(&px_[split * split_size + subsplit * subsplit_size], subsplit_size, subquantizers[split][subsplit], num_clusters);
 		}
 	}
 
 	return fine;
 }
 
-Model::Vector_<scalar_t> Model::project(const scalar_t* x_, const uint32_t sz, const Model::Codes& coarse_code) const {
-	auto px_ = Vector_<scalar_t>(sz);
+Model::CUVector Model::project(const scalar_t* x_, const uint32_t sz, const Model::Codes& coarse_code) const {
+	auto px_ = Model::CUVector(sz);
 
 	uint32_t split_size = sz / num_coarse_splits;
 
@@ -236,13 +234,13 @@ Model::Vector_<scalar_t> Model::project(const scalar_t* x_, const uint32_t sz, c
 	cudaMemset(r_, 0.0, sz * sizeof(r_[0]));
 
 	for (uint32_t split = 0; split < num_coarse_splits; ++split) {
-		auto& cluster = coarse_code.codes[split];
+		auto& cluster = coarse_code[split];
 
-		residual<<<1, 1>>>(&r_[split * split_size], &x_[split * split_size], split_size, cluster, Cs[split], Cszs[split].h, mus[split][cluster]);
+		residual<<<1, 1>>>(&r_[split * split_size], &x_[split * split_size], split_size, cluster, Cs[split], num_clusters, mus[split][cluster]);
 
 		const scalar_t alfa=1.0;
 		const scalar_t beta=0;
-		cublasgemv(handle, CUBLAS_OP_N, split_size, split_size, &alfa, Rs[split][cluster], split_size, &r_[split * split_size], 1, &beta, &px_.x[split * split_size], 1);
+		cublasgemv(handle, CUBLAS_OP_N, split_size, split_size, &alfa, Rs[split][cluster], split_size, &r_[split * split_size], 1, &beta, &px_[split * split_size], 1);
 	}
 
 	cudaFree(r_);

@@ -62,13 +62,13 @@ void test_(const std::string& proto_path) {
 	auto coarse = model.predict_coarse(x, 128);
 	std::cout << "   - predicted coarse codes: ";
 	for (uint8_t i = 0; i < 2; ++i)
-		std::cout << std::hex << (int)coarse.codes[i] << std::dec << ' ';
+		std::cout << std::hex << (int)coarse[i] << std::dec << ' ';
 	std::cout << '\n';
 
 	auto fine = model.predict_fine(x, 128, coarse);
 	std::cout << "   - predicted fine codes: ";
 	for (uint8_t i = 0; i < 16; ++i)
-		std::cout << std::hex << (int)fine.codes[i] << std::dec << ' ';
+		std::cout << std::hex << (int)fine[i] << std::dec << ' ';
 	std::cout << '\n';
 
 	cublasDestroy(handle);
