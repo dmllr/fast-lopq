@@ -56,15 +56,14 @@ __global__
 void susq(const scalar_t* x_, const scalar_t* C_, uint8_t cszw, scalar_t* ds_) {
 	for (int i = 0; i < cszw; ++i) {
 		auto v = static_cast<scalar_t>(x_[i] - C_[IDX(threadIdx.x, i, blockDim.x)]);
-
 		ds_[threadIdx.x] += v * v;
 	}
 }
 
 __global__
 void residual(scalar_t* r_, const scalar_t* x_, uint8_t sz, const uint8_t cluster, const scalar_t* C_, const int csz, const scalar_t* mu_) {
-	for (int i = 0; i < sz; ++i)
-		r_[i] = static_cast<scalar_t>(x_[i] - C_[IDX(cluster, i, csz)] - mu_[i]);
+	auto i = threadIdx.x;
+	r_[i] = static_cast<scalar_t>(x_[i] - C_[IDX(cluster, i, csz)] - mu_[i]);
 }
 
 } // namespace
@@ -236,7 +235,7 @@ Model::CUVector Model::project(const scalar_t* x_, const uint32_t sz, const Mode
 	for (uint32_t split = 0; split < num_coarse_splits; ++split) {
 		auto& cluster = coarse_code[split];
 
-		residual<<<1, 1>>>(&r_[split * split_size], &x_[split * split_size], split_size, cluster, Cs[split], num_clusters, mus[split][cluster]);
+		residual<<<1, split_size>>>(&r_[split * split_size], &x_[split * split_size], split_size, cluster, Cs[split], num_clusters, mus[split][cluster]);
 
 		const scalar_t alfa=1.0;
 		const scalar_t beta=0;
