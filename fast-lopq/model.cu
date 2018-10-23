@@ -265,7 +265,7 @@ uint8_t Model::predict_cluster(scalar_t* x, const uint32_t sz, scalar_t* centroi
 	return (uint8_t)(amin - 1);
 }
 
-int Model::subquantizer_distances(const scalar_t* x, const size_t sz, const Model::Codes& coarse_code, uint32_t split) const {
+Model::Vector<Model::CUVector> Model::subquantizer_distances(const scalar_t* x, const size_t sz, const Model::Codes& coarse_code, uint32_t split) const {
 	// TODO x to gpu one time
 	scalar_t* x_;
 	cudaMalloc((void**)&x_, sz * sizeof(scalar_t));
@@ -282,29 +282,22 @@ int Model::subquantizer_distances(const scalar_t* x, const size_t sz, const Mode
 	uint32_t subsplit_size = split_size / num_fine_splits;
 
 	// blaze::DynamicVector<Model::FloatVector> distances(num_fine_splits);
+	Model::Vector<Model::CUVector> distances(num_fine_splits);
+	
+	std::cout << "split_size " << split_size << ", subsplit_size " << subsplit_size << "\n";
 
-	scalar_t* ds_;
-	cudaMalloc((void**)&ds_, subsplit_size * sizeof(ds_[0]));
-	cudaMemset(ds_, 0.0, subsplit_size * sizeof(ds_[0]));
 	for (uint32_t subsplit = 0; subsplit < num_fine_splits; ++subsplit) {
-		auto fx = &sx_[subsplit * subsplit_size];  // size = subsplit_size
+		auto fx_ = &sx_[subsplit * subsplit_size];  // size = subsplit_size
 		
-		susq<<<1, subsplit_size>>>(fx, subquantizers[split][subsplit], subsplit_size, ds_);
+		CUVector ds(num_clusters);
+		ds.zeros();
 
-	// 	blaze::DynamicVector<double, blaze::rowVector> tx = blaze::trans(fx);
-	// 	blaze::DynamicMatrix<float> cx(subquantizers[split][subsplit]);
-	// 	for (uint32_t r = 0; r < cx.rows(); ++r)
-	// 		blaze::row(cx, r) = tx - blaze::row(cx, r);
+		susq<<<1, num_clusters>>>(fx_, subquantizers[split][subsplit], subsplit_size, ds.x);
 
-	// 	blaze::DynamicMatrix<float> cx_sq = map(cx, [](float d) { return d * d; } );
-
-	// 	blaze::DynamicVector<float, blaze::columnVector> multiplier(cx_sq.columns(), 1.0);
-
-	// 	distances[subsplit] = cx_sq * multiplier;
+		distances[subsplit] = ds;
 	}
 
-	// return distances;
-	return 0;
+	return distances;
 }
 
 } // gpu
