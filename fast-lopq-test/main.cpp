@@ -112,30 +112,30 @@ int main(int argc, char **argv) {
 		std::cout << std::hex << (int)fine[i] << ' ';
 	std::cout << std::dec << '\n';
 
-//	std::cout << "2. Testing of: LOPQ Searcher\n";
-//
-//	std::cout << " * loading index into memoory\n";
-//	auto one_cell_of_index = load_index(index_path);
-//
-//	Searcher searcher(*one_cell_of_index);
-//	std::cout << " * loading model\n";
-//	searcher.load_model(model_path);
-//
-//
-//	std::cout << " * searching...\n";
-//	auto t0 = std::chrono::steady_clock::now();
-//
-//	auto results = searcher.search(x);
-//
-//	auto t1 = std::chrono::steady_clock::now();
-//	std::cout << "    - got result in " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << '\n';
-//
-//	for (auto& r: results)
-//		std::cout << "      - " << r.id << " ms\n";
-//
-//	one_cell_of_index.reset();
+	std::cout << "2. Testing of: LOPQ Searcher\n";
 
-	test_(model_path);
+	std::cout << " * loading index into memoory\n";
+	auto one_cell_of_index = load_index(index_path);
+
+	Searcher searcher(*one_cell_of_index);
+	std::cout << " * loading model\n";
+	searcher.load_model(model_path);
+
+
+	std::cout << " * searching...\n";
+	auto t0 = std::chrono::steady_clock::now();
+
+	auto results = searcher.search(x);
+
+	auto t1 = std::chrono::steady_clock::now();
+	std::cout << "    - got result in " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << '\n';
+
+	for (auto& r: results)
+		std::cout << "      - " << r.id << " ms\n";
+
+	one_cell_of_index.reset();
+
+	test_(model_path, index_path);
 
 	std::cout << "DONE\n";
 

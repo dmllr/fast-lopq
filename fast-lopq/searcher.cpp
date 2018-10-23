@@ -8,7 +8,7 @@
 
 
 namespace lopq {
-
+	
 void Searcher::load_model(const std::string& proto_path) {
 	model.load(proto_path);
 }

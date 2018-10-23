@@ -63,6 +63,7 @@ struct Model final {
 	void load(const std::string& proto_path);
 	Codes predict_coarse(const scalar_t* x, const uint32_t sz) const;
 	Codes predict_fine(const scalar_t* x, const uint32_t sz, const Codes& coarse_code) const;
+	int subquantizer_distances(const scalar_t* x, const size_t sz, const Codes& coarse_code, uint32_t split) const;
 
 private:
 	uint32_t num_clusters = 0;

@@ -3,11 +3,13 @@ add_library(fast-lopq
 
     model.cpp
     model.cu
-#    searcher.cpp
+    searcher.cpp
+    searcher.cu
 
     include/fast-lopq/model.h
     include/fast-lopq/model.cuh
-#    include/fast-lopq/searcher.h
+    include/fast-lopq/searcher.h
+    include/fast-lopq/searcher.cuh
 )
 
 add_custom_command(

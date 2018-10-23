@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <cassert>
 
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
@@ -189,6 +190,7 @@ void Model::load(const std::string& proto_path) {
 }
 
 Model::Codes Model::predict_coarse(const scalar_t* x, const uint32_t sz) const {
+	// TODO x to gpu one time
 	scalar_t* x_;
 	cudaMalloc((void**)&x_, sz * sizeof(scalar_t));
 	cublasSetVector(sz, sizeof(scalar_t), x, 1, x_, 1);
@@ -203,6 +205,7 @@ Model::Codes Model::predict_coarse(const scalar_t* x, const uint32_t sz) const {
 }
 
 Model::Codes Model::predict_fine(const scalar_t* x, const uint32_t sz, const Model::Codes& coarse_code) const {
+	// TODO x to gpu one time
 	scalar_t* x_;
 	cudaMalloc((void**)&x_, sz * sizeof(scalar_t));
 	cublasSetVector(sz, sizeof(scalar_t), x, 1, x_, 1);
@@ -251,7 +254,7 @@ uint8_t Model::predict_cluster(scalar_t* x, const uint32_t sz, scalar_t* centroi
 	scalar_t* ds_;
 	cudaMalloc((void**)&ds_, csz * sizeof(ds_[0]));
 	cudaMemset(ds_, 0.0, csz * sizeof(ds_[0]));
-	susq<<<1, csz>>>(x, centroids, sz, ds_);
+	susq<<<1, num_clusters>>>(x, centroids, sz, ds_);
 	cudaDeviceSynchronize();
 
 	int amin;
@@ -260,6 +263,48 @@ uint8_t Model::predict_cluster(scalar_t* x, const uint32_t sz, scalar_t* centroi
 	cudaFree(ds_);
 
 	return (uint8_t)(amin - 1);
+}
+
+int Model::subquantizer_distances(const scalar_t* x, const size_t sz, const Model::Codes& coarse_code, uint32_t split) const {
+	// TODO x to gpu one time
+	scalar_t* x_;
+	cudaMalloc((void**)&x_, sz * sizeof(scalar_t));
+	cublasSetVector(sz, sizeof(scalar_t), x, 1, x_, 1);
+
+	Model::Codes fine(num_fine_splits);
+
+	auto px_ = project(x_, sz, coarse_code);
+
+	uint32_t split_size = sz / num_coarse_splits;
+
+	auto sx_ = &px_[split * split_size];  // size = split_size
+
+	uint32_t subsplit_size = split_size / num_fine_splits;
+
+	// blaze::DynamicVector<Model::FloatVector> distances(num_fine_splits);
+
+	scalar_t* ds_;
+	cudaMalloc((void**)&ds_, subsplit_size * sizeof(ds_[0]));
+	cudaMemset(ds_, 0.0, subsplit_size * sizeof(ds_[0]));
+	for (uint32_t subsplit = 0; subsplit < num_fine_splits; ++subsplit) {
+		auto fx = &sx_[subsplit * subsplit_size];  // size = subsplit_size
+		
+		susq<<<1, subsplit_size>>>(fx, subquantizers[split][subsplit], subsplit_size, ds_);
+
+	// 	blaze::DynamicVector<double, blaze::rowVector> tx = blaze::trans(fx);
+	// 	blaze::DynamicMatrix<float> cx(subquantizers[split][subsplit]);
+	// 	for (uint32_t r = 0; r < cx.rows(); ++r)
+	// 		blaze::row(cx, r) = tx - blaze::row(cx, r);
+
+	// 	blaze::DynamicMatrix<float> cx_sq = map(cx, [](float d) { return d * d; } );
+
+	// 	blaze::DynamicVector<float, blaze::columnVector> multiplier(cx_sq.columns(), 1.0);
+
+	// 	distances[subsplit] = cx_sq * multiplier;
+	}
+
+	// return distances;
+	return 0;
 }
 
 } // gpu

@@ -1,14 +1,49 @@
 #include "device.cuh"
 
+#include <cstdint>
 #include <iostream>
+#include <fstream>
+#include <chrono>
+#include <memory>
 
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
 
 #include <fast-lopq/model.cuh>
+#include <fast-lopq/searcher.cuh>
 
 
-void test_(const std::string& proto_path) {
+struct Searcher_ final : public lopq::gpu::Searcher {
+	Searcher_(cublasHandle_t handle, const std::string& index_path) : lopq::gpu::Searcher(handle) {
+		load_index_(index_path);
+	}
+
+	void load_index_(const std::string& index_path) {
+		std::cout << " * loading index into memoory\n";
+
+		std::string code_string;
+		std::string id;
+
+		std::ifstream raw_index(index_path);
+		while (raw_index >> code_string >> id) {
+
+			lopq::gpu::Model::Codes fine_code(16);
+			for (int i = 0; i < 16; ++i)
+				sscanf(code_string.c_str() + 2 * i, "%2hhX", &fine_code[i]);
+
+			cluster.ids.emplace_back(id);
+			cluster.vectors.emplace_back(fine_code);
+		}
+	}
+
+	lopq::gpu::Searcher::Cluster& get_cell(const lopq::gpu::Model::Codes& /*coarse_code*/) {
+		return cluster;
+	}
+
+	lopq::gpu::Searcher::Cluster cluster;
+};
+
+void test_(const std::string& proto_path, const std::string& index_path) {
 	cublasStatus_t stat;
 	cublasHandle_t handle;
 
@@ -70,6 +105,26 @@ void test_(const std::string& proto_path) {
 	for (uint8_t i = 0; i < 16; ++i)
 		std::cout << std::hex << (int)fine[i] << std::dec << ' ';
 	std::cout << '\n';
+
+	std::cout << "2. Testing of: LOPQ Searcher\n";
+
+	Searcher_ searcher(handle, index_path);
+	std::cout << " * loading model\n";
+	searcher.load_model(proto_path);
+
+
+	std::cout << " * searching...\n";
+	auto t0 = std::chrono::steady_clock::now();
+
+	auto results = searcher.search(x);
+
+	auto t1 = std::chrono::steady_clock::now();
+	std::cout << "    - got result in " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << '\n';
+
+	for (auto& r: results)
+		std::cout << "      - " << r.id << " ms\n";
+
+	// one_cell_of_index.reset();
 
 	cublasDestroy(handle);
 }
