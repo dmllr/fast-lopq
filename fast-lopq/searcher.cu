@@ -8,46 +8,61 @@
 #include <cassert>
 
 
+namespace {
+
+__global__
+void k_distance(int n) {
+	int index = blockIdx.x * blockDim.x + threadIdx.x;
+	int stride = blockDim.x * gridDim.x;
+	for (int i = index; i < n; i += stride)
+		;
+}
+
+} // namespace
+
+
 namespace lopq {
 namespace gpu {
 
 Searcher::Searcher(cublasHandle_t handle) : handle(handle) {
+	Model m(handle);
+	model = m;
 }
 
 void Searcher::load_model(const std::string& proto_path) {
 	model.load(proto_path);
 }
 
-float Searcher::distance(const scalar_t* x, size_t sz, const Model::Codes& coarse_code, const Model::Codes& fine_code, Searcher::DistanceCache& cache) const {
+float Searcher::distance(const scalar_t* x_, const size_t sz, const Model::Codes& coarse_code, const Model::Codes& fine_code, Searcher::DistanceCache& cache) const {
 	float D = 0.0;
 
-	// auto& d0 = cache[coarse_code[0]];
-	// auto& d1 = cache[coarse_code[1]];
-	// auto d0s = d0.size();
+	auto& d0 = cache[coarse_code[0]];
+	auto& d1 = cache[coarse_code[1]];
+	auto d0s = d0.size;
 
-	// if (d0s == 0) {
-	// 	d0 = model.subquantizer_distances(x, coarse_code, 0);
-	// 	d0s = d0.size();
-	// }
-	// if (d1.size() == 0)
-	// 	d1 = model.subquantizer_distances(x, coarse_code, 1);
+	if (d0s == 0) {
+		d0 = model.subquantizer_distances(x_, sz, coarse_code, 0);
+		d0s = d0.size;
+	}
+	if (d1.size == 0)
+		d1 = model.subquantizer_distances(x_, sz, coarse_code, 1);
 
-	// uint32_t c = 0;
-	// for (auto& e: fine_code) {
-	// 	D += (c < d0s) ? d0[c][e] : d1[c - d0s][e];
-	// 	c++;
-	// };
+	for (uint32_t i = 0; i < model.num_fine_splits; ++i) {
+		auto& e = fine_code[i];
+		// D += (i < d0s) ? d0[i][e] : d1[i - d0s][e];
+	};
 
 	return D;
- }
-
-std::vector<Searcher::Response> Searcher::search(const scalar_t* x) {
-	auto const coarse_code = model.predict_coarse(x, 128);
-
-	return search_in(coarse_code, x);
 }
 
-std::vector<Searcher::Response> Searcher::search_in(const Model::Codes& coarse_code, const scalar_t* x) {
+std::vector<Searcher::Response> Searcher::search(const scalar_t* x_) {
+	auto coarse_code = model.predict_coarse(x_, 128);
+	printf("cc = %d, %d (%d)\n", coarse_code[0], coarse_code[1], coarse_code.size);
+
+	return search_in(coarse_code, x_, 128);
+}
+
+std::vector<Searcher::Response> Searcher::search_in(const Model::Codes& coarse_code, const scalar_t* x_, const size_t sz) {
 	auto& index = get_cell(coarse_code);
 	auto& index_codes = index.vectors;
 
@@ -60,12 +75,12 @@ std::vector<Searcher::Response> Searcher::search_in(const Model::Codes& coarse_c
 
 	std::vector<i_d> distances(index_codes.size());
 
-	// // calculate relative distances for all vectors in cluster
-	// uint32_t c = 0;
-	// for (auto& e: distances) {
-	//	e.second = distance(x, coarse_code, index_codes[c], distance_cache);
-	//	e.first = c++;
-	// };
+	// calculate relative distances for all vectors in cluster
+	uint32_t c = 0;
+	for (auto& e: distances) {
+		e.second = distance(x_, sz, coarse_code, index_codes[c], distance_cache);
+		e.first = c++;
+	};
 
 	// // take top N
 	// std::partial_sort(

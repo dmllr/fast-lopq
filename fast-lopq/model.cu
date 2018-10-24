@@ -17,10 +17,9 @@
 
 namespace {
 
-template <class T>
-void log1d(const std::string& name, T* x, int w) {
-	T* x_ = new T[w];
-	cudaMemcpy(x_, x, w * sizeof(T), cudaMemcpyDeviceToHost);
+void log1d(const std::string& name, scalar_t* x, int w) {
+	scalar_t* x_ = new scalar_t[w];
+	cudaMemcpy(x_, x, w * sizeof(scalar_t), cudaMemcpyDeviceToHost);
 
 	std::cout << name << "\n";
 	for (int i = 0; i < w; ++i) {
@@ -54,7 +53,7 @@ void log2d(const std::string& name, scalar_t* x_, int d) {
 }
 
 __global__
-void susq(const scalar_t* x_, const scalar_t* C_, uint8_t cszw, scalar_t* ds_) {
+void k_directions(const scalar_t* x_, const scalar_t* C_, uint8_t cszw, scalar_t* ds_) {
 	for (int i = 0; i < cszw; ++i) {
 		auto v = static_cast<scalar_t>(x_[i] - C_[IDX(threadIdx.x, i, blockDim.x)]);
 		ds_[threadIdx.x] += v * v;
@@ -62,7 +61,7 @@ void susq(const scalar_t* x_, const scalar_t* C_, uint8_t cszw, scalar_t* ds_) {
 }
 
 __global__
-void residual(scalar_t* r_, const scalar_t* x_, uint8_t sz, const uint8_t cluster, const scalar_t* C_, const int csz, const scalar_t* mu_) {
+void k_residual(scalar_t* r_, const scalar_t* x_, uint8_t sz, const uint8_t cluster, const scalar_t* C_, const int csz, const scalar_t* mu_) {
 	auto i = threadIdx.x;
 	r_[i] = static_cast<scalar_t>(x_[i] - C_[IDX(cluster, i, csz)] - mu_[i]);
 }
@@ -189,12 +188,7 @@ void Model::load(const std::string& proto_path) {
 	std::cout << '\n';
 }
 
-Model::Codes Model::predict_coarse(const scalar_t* x, const uint32_t sz) const {
-	// TODO x to gpu one time
-	scalar_t* x_;
-	cudaMalloc((void**)&x_, sz * sizeof(scalar_t));
-	cublasSetVector(sz, sizeof(scalar_t), x, 1, x_, 1);
-
+Model::Codes Model::predict_coarse(const scalar_t* x_, const uint32_t sz) const {
 	Model::Codes coarse(num_coarse_splits);
 
 	uint32_t split_size = sz / num_coarse_splits;
@@ -204,12 +198,7 @@ Model::Codes Model::predict_coarse(const scalar_t* x, const uint32_t sz) const {
 	return coarse;
 }
 
-Model::Codes Model::predict_fine(const scalar_t* x, const uint32_t sz, const Model::Codes& coarse_code) const {
-	// TODO x to gpu one time
-	scalar_t* x_;
-	cudaMalloc((void**)&x_, sz * sizeof(scalar_t));
-	cublasSetVector(sz, sizeof(scalar_t), x, 1, x_, 1);
-
+Model::Codes Model::predict_fine(const scalar_t* x_, const uint32_t sz, const Model::Codes& coarse_code) const {
 	Model::Codes fine(num_fine_splits);
 
 	auto px_ = project(x_, sz, coarse_code);
@@ -238,7 +227,7 @@ Model::CUVector Model::project(const scalar_t* x_, const uint32_t sz, const Mode
 	for (uint32_t split = 0; split < num_coarse_splits; ++split) {
 		auto& cluster = coarse_code[split];
 
-		residual<<<1, split_size>>>(&r_[split * split_size], &x_[split * split_size], split_size, cluster, Cs[split], num_clusters, mus[split][cluster]);
+		k_residual<<<1, split_size>>>(&r_[split * split_size], &x_[split * split_size], split_size, cluster, Cs[split], num_clusters, mus[split][cluster]);
 
 		const scalar_t alfa=1.0;
 		const scalar_t beta=0;
@@ -250,13 +239,13 @@ Model::CUVector Model::project(const scalar_t* x_, const uint32_t sz, const Mode
 	return px_;
 }
 
-uint8_t Model::predict_cluster(scalar_t* x, const uint32_t sz, scalar_t* centroids, const uint32_t csz) const {
+uint8_t Model::predict_cluster(const scalar_t* x, const uint32_t sz, const scalar_t* centroids, const uint32_t csz) const {
 	scalar_t* ds_;
 	cudaMalloc((void**)&ds_, csz * sizeof(ds_[0]));
 	cudaMemset(ds_, 0.0, csz * sizeof(ds_[0]));
-	susq<<<1, num_clusters>>>(x, centroids, sz, ds_);
+	k_directions<<<1, num_clusters>>>(x, centroids, sz, ds_);
 	cudaDeviceSynchronize();
-
+	
 	int amin;
 	cublasIsamin(handle, csz, ds_, 1, &amin);
 
@@ -265,14 +254,7 @@ uint8_t Model::predict_cluster(scalar_t* x, const uint32_t sz, scalar_t* centroi
 	return (uint8_t)(amin - 1);
 }
 
-Model::Vector<Model::CUVector> Model::subquantizer_distances(const scalar_t* x, const size_t sz, const Model::Codes& coarse_code, uint32_t split) const {
-	// TODO x to gpu one time
-	scalar_t* x_;
-	cudaMalloc((void**)&x_, sz * sizeof(scalar_t));
-	cublasSetVector(sz, sizeof(scalar_t), x, 1, x_, 1);
-
-	Model::Codes fine(num_fine_splits);
-
+Model::SubquantizerDistances Model::subquantizer_distances(const scalar_t* x_, const size_t sz, const Model::Codes& coarse_code, uint32_t split) const {
 	auto px_ = project(x_, sz, coarse_code);
 
 	uint32_t split_size = sz / num_coarse_splits;
@@ -281,18 +263,15 @@ Model::Vector<Model::CUVector> Model::subquantizer_distances(const scalar_t* x, 
 
 	uint32_t subsplit_size = split_size / num_fine_splits;
 
-	// blaze::DynamicVector<Model::FloatVector> distances(num_fine_splits);
 	Model::Vector<Model::CUVector> distances(num_fine_splits);
 	
-	std::cout << "split_size " << split_size << ", subsplit_size " << subsplit_size << "\n";
-
 	for (uint32_t subsplit = 0; subsplit < num_fine_splits; ++subsplit) {
 		auto fx_ = &sx_[subsplit * subsplit_size];  // size = subsplit_size
 		
 		CUVector ds(num_clusters);
 		ds.zeros();
 
-		susq<<<1, num_clusters>>>(fx_, subquantizers[split][subsplit], subsplit_size, ds.x);
+		k_directions<<<1, num_clusters>>>(fx_, subquantizers[split][subsplit], subsplit_size, ds.x);
 
 		distances[subsplit] = ds;
 	}

@@ -33,8 +33,8 @@ struct Searcher {
 
 	void load_model(const std::string& proto_path);
 
-	std::vector<Response> search(const scalar_t* x);
-	std::vector<Response> search_in(const Model::Codes& coarse_code, const scalar_t* x);
+	std::vector<Response> search(const scalar_t* x_);
+	std::vector<Response> search_in(const Model::Codes& coarse_code, const scalar_t* x_, const size_t sz);
 
 protected:
 	virtual Cluster& get_cell(const Model::Codes& coarse_code) = 0;
@@ -44,10 +44,10 @@ private:
 	std::unordered_map<int, Cluster> clusters;
 
 	cublasHandle_t handle;
-	using DistanceCache = std::unordered_map<int, Model::Vector<scalar_t>>;
-	// using DistanceCache = std::unordered_map<int, blaze::DynamicVector<Model::FloatVector>>;
 
-	float distance(const scalar_t* x, size_t sz, const Model::Codes& coarse_code, const Model::Codes& fine_code, Searcher::DistanceCache& cache) const;
+	using DistanceCache = std::unordered_map<int, Model::SubquantizerDistances>;
+
+	float distance(const scalar_t* x, const size_t sz, const Model::Codes& coarse_code, const Model::Codes& fine_code, Searcher::DistanceCache& cache) const;
 };
 
 } // gpu

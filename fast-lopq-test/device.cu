@@ -54,12 +54,7 @@ void test_(const std::string& proto_path, const std::string& index_path) {
 	}
 	printf("CUBLAS initialized\n");
 
-
-	printf(" * loading gpu model\n");
-	lopq::gpu::Model model(handle);
-	model.load(proto_path);
-
-
+	size_t sz = 128;
 	scalar_t x[128] = {
 			-5.15871673e-01,  2.96075179e-01, -1.29803211e-01,  7.89666891e-02,
 			-2.13094767e-02,  1.22119331e-01,  8.73494489e-02,  6.42005949e-02,
@@ -94,17 +89,28 @@ void test_(const std::string& proto_path, const std::string& index_path) {
 			 1.59078274e-02,  2.81953542e-03,  1.39462522e-02,  1.37137151e-03,
 			-1.73925928e-02, -4.37456374e-03, -2.44480027e-02,  1.72845493e-03  };
 
-	auto coarse = model.predict_coarse(x, 128);
-	std::cout << "   - predicted coarse codes: ";
-	for (uint8_t i = 0; i < 2; ++i)
-		std::cout << std::hex << (int)coarse[i] << std::dec << ' ';
-	std::cout << '\n';
+	scalar_t* x_;
+	cudaMalloc((void**)&x_, sz * sizeof(scalar_t));
+	cublasSetVector(sz, sizeof(scalar_t), x, 1, x_, 1);
 
-	auto fine = model.predict_fine(x, 128, coarse);
-	std::cout << "   - predicted fine codes: ";
-	for (uint8_t i = 0; i < 16; ++i)
-		std::cout << std::hex << (int)fine[i] << std::dec << ' ';
-	std::cout << '\n';
+	// printf(" * loading gpu model\n");
+	// lopq::gpu::Model model(handle);
+	// model.load(proto_path);
+
+	// auto coarse = model.predict_coarse(x_, sz);
+	// std::cout << "   - predicted coarse codes: ";
+	// for (uint8_t i = 0; i < 2; ++i)
+	// 	std::cout << std::hex << (int)coarse[i] << std::dec << ' ';
+	// std::cout << '\n';
+
+	// auto fine = model.predict_fine(x_, sz, coarse);
+	// std::cout << "   - predicted fine codes: ";
+	// for (uint8_t i = 0; i < 16; ++i)
+	// 	std::cout << std::hex << (int)fine[i] << std::dec << ' ';
+	// std::cout << '\n';
+
+	// auto sd = model.subquantizer_distances(x_, sz, coarse, 0);
+	// std::cout << "    - subquantizer distances: " << sd.size << "x" << sd[0].size << "\n";
 
 	std::cout << "2. Testing of: LOPQ Searcher\n";
 
@@ -112,17 +118,16 @@ void test_(const std::string& proto_path, const std::string& index_path) {
 	std::cout << " * loading model\n";
 	searcher.load_model(proto_path);
 
-
 	std::cout << " * searching...\n";
 	auto t0 = std::chrono::steady_clock::now();
 
-	auto results = searcher.search(x);
+	auto results = searcher.search(x_);
 
 	auto t1 = std::chrono::steady_clock::now();
-	std::cout << "    - got result in " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << '\n';
+	std::cout << "    - got result in " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << " ms\n";
 
 	for (auto& r: results)
-		std::cout << "      - " << r.id << " ms\n";
+		std::cout << "      - " << r.id << "\n";
 
 	// one_cell_of_index.reset();
 
