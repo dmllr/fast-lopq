@@ -49,21 +49,7 @@ void log2d(const std::string& name, scalar_t* x_, int d) {
 	std::cout << 64 << "-" << 0 << ": " << x[IDX(64, 0, d)] << "\n";
 	std::cout << 64 << "-" << 1 << ": " << x[IDX(64, 1, d)] << "\n";
 
-	delete x;
-}
-
-__global__
-void k_directions(const scalar_t* x_, const scalar_t* C_, uint8_t cszw, scalar_t* ds_) {
-	for (int i = 0; i < cszw; ++i) {
-		auto v = static_cast<scalar_t>(x_[i] - C_[IDX(threadIdx.x, i, blockDim.x)]);
-		ds_[threadIdx.x] += v * v;
-	}
-}
-
-__global__
-void k_residual(scalar_t* r_, const scalar_t* x_, uint8_t sz, const uint8_t cluster, const scalar_t* C_, const int csz, const scalar_t* mu_) {
-	auto i = threadIdx.x;
-	r_[i] = static_cast<scalar_t>(x_[i] - C_[IDX(cluster, i, csz)] - mu_[i]);
+	delete[] x;
 }
 
 } // namespace
@@ -71,6 +57,66 @@ void k_residual(scalar_t* r_, const scalar_t* x_, uint8_t sz, const uint8_t clus
 
 namespace lopq {
 namespace gpu {
+
+__global__
+void directions(const scalar_t* x_, const scalar_t* C_, uint8_t cszw, scalar_t* ds_) {
+	for (int i = 0; i < cszw; ++i) {
+		auto v = static_cast<scalar_t>(x_[i] - C_[IDX(threadIdx.x, i, blockDim.x)]);
+		ds_[threadIdx.x] += v * v;
+	}
+}
+
+__global__
+void residual(scalar_t* r_, const scalar_t* x_, uint8_t sz, const uint8_t cluster, const scalar_t* C_, const int csz, const scalar_t* mu_) {
+	auto i = threadIdx.x;
+	r_[i] = static_cast<scalar_t>(x_[i] - C_[IDX(cluster, i, csz)] - mu_[i]);
+}
+
+__device__
+void project(const Model& model, scalar_t* px_, const scalar_t* x_, const uint32_t sz, const uint8_t* coarse_code) {
+	uint32_t split_size = sz / model.num_coarse_splits;
+
+	scalar_t* r_ = (scalar_t*)malloc(sz);
+	for (uint32_t split = 0; split < model.num_coarse_splits; ++split) {
+		auto& cluster = coarse_code[split];
+
+		residual<<<1, split_size>>>(&r_[split * split_size], &x_[split * split_size], split_size, cluster, model.Cs[split], model.num_clusters, model.mus[split][cluster]);
+
+		const scalar_t alfa=1.0;
+		const scalar_t beta=0.0;
+		cublasgemv(model.handle, CUBLAS_OP_N, split_size, split_size, &alfa, model.Rs[split][cluster], split_size, &r_[split * split_size], 1, &beta, &px_[split * split_size], 1);
+	}
+
+	free(r_);
+}
+
+__device__
+void subquantizer_distances(const Model& model, const scalar_t* x_, const size_t sz, const uint8_t* coarse_code, uint32_t split) {
+	scalar_t* px_ = (scalar_t*)malloc(sz);
+	memset(px_, 0.0, sz * sizeof(scalar_t));
+
+	project(model, px_, x_, sz, coarse_code);
+
+	uint32_t split_size = sz / model.num_coarse_splits;
+
+	auto sx_ = &px_[split * split_size];  // size = split_size
+
+	uint32_t subsplit_size = split_size / model.num_fine_splits;
+
+	// lopq::gpu::Model::Vector<lopq::gpu::Model::CUVector> distances(8/*num_fine_splits*/);
+	scalar_t* distances_ = (scalar_t*)malloc(model.num_fine_splits * model.num_clusters);
+	memset(distances_, 0.0, model.num_fine_splits * model.num_clusters * sizeof(scalar_t));
+	
+	for (uint32_t subsplit = 0; subsplit < model.num_fine_splits; ++subsplit) {
+		auto fx_ = &sx_[subsplit * subsplit_size];  // size = subsplit_size
+		auto ds_ = &distances_[subsplit * model.num_clusters];
+
+		directions<<<1, model.num_clusters>>>(fx_, model.subquantizers[split][subsplit], subsplit_size, ds_);
+	}
+
+	// return distances;
+}
+
 
 Model::Model(cublasHandle_t handle) : handle(handle) {
 
@@ -227,7 +273,7 @@ Model::CUVector Model::project(const scalar_t* x_, const uint32_t sz, const Mode
 	for (uint32_t split = 0; split < num_coarse_splits; ++split) {
 		auto& cluster = coarse_code[split];
 
-		k_residual<<<1, split_size>>>(&r_[split * split_size], &x_[split * split_size], split_size, cluster, Cs[split], num_clusters, mus[split][cluster]);
+		residual<<<1, split_size>>>(&r_[split * split_size], &x_[split * split_size], split_size, cluster, Cs[split], num_clusters, mus[split][cluster]);
 
 		const scalar_t alfa=1.0;
 		const scalar_t beta=0;
@@ -243,7 +289,7 @@ uint8_t Model::predict_cluster(const scalar_t* x, const uint32_t sz, const scala
 	scalar_t* ds_;
 	cudaMalloc((void**)&ds_, csz * sizeof(ds_[0]));
 	cudaMemset(ds_, 0.0, csz * sizeof(ds_[0]));
-	k_directions<<<1, num_clusters>>>(x, centroids, sz, ds_);
+	directions<<<1, num_clusters>>>(x, centroids, sz, ds_);
 	cudaDeviceSynchronize();
 	
 	int amin;
@@ -271,7 +317,7 @@ Model::SubquantizerDistances Model::subquantizer_distances(const scalar_t* x_, c
 		CUVector ds(num_clusters);
 		ds.zeros();
 
-		k_directions<<<1, num_clusters>>>(fx_, subquantizers[split][subsplit], subsplit_size, ds.x);
+		directions<<<1, num_clusters>>>(fx_, subquantizers[split][subsplit], subsplit_size, ds.x);
 
 		distances[subsplit] = ds;
 	}

@@ -20,7 +20,8 @@ struct Searcher {
 
 	struct Cluster final {
 		std::vector<std::string> ids;
-		std::vector<Model::Codes> vectors;
+		uint8_t* vectors;
+		uint32_t size;
 	};
 
 	struct Response final {
@@ -47,7 +48,7 @@ private:
 
 	using DistanceCache = std::unordered_map<int, Model::SubquantizerDistances>;
 
-	float distance(const scalar_t* x, const size_t sz, const Model::Codes& coarse_code, const Model::Codes& fine_code, Searcher::DistanceCache& cache) const;
+	scalar_t distance(const scalar_t* x, const size_t sz, const Model::Codes& coarse_code, const Model::Codes& fine_code, Searcher::DistanceCache& cache) const;
 };
 
 } // gpu

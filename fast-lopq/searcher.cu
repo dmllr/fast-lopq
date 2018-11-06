@@ -11,11 +11,13 @@
 namespace {
 
 __global__
-void k_distance(int n) {
-	int index = blockIdx.x * blockDim.x + threadIdx.x;
+void all_distances(const lopq::gpu::Model& model, const scalar_t* x_, const size_t sz, const lopq::gpu::Model::Codes& coarse_code, const int n, const uint8_t* vectors_) {
+	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 	int stride = blockDim.x * gridDim.x;
-	for (int i = index; i < n; i += stride)
-		;
+	for (int i = idx; i < n; i += stride) {
+		// lopq::gpu::subquantizer_distances(model, x_, sz, coarse_code.x, 0);
+		auto distance = 0;
+	}
 }
 
 } // namespace
@@ -33,8 +35,8 @@ void Searcher::load_model(const std::string& proto_path) {
 	model.load(proto_path);
 }
 
-float Searcher::distance(const scalar_t* x_, const size_t sz, const Model::Codes& coarse_code, const Model::Codes& fine_code, Searcher::DistanceCache& cache) const {
-	float D = 0.0;
+scalar_t Searcher::distance(const scalar_t* x_, const size_t sz, const Model::Codes& coarse_code, const Model::Codes& fine_code, Searcher::DistanceCache& cache) const {
+	scalar_t D = 0.0;
 
 	auto& d0 = cache[coarse_code[0]];
 	auto& d1 = cache[coarse_code[1]];
@@ -57,30 +59,32 @@ float Searcher::distance(const scalar_t* x_, const size_t sz, const Model::Codes
 
 std::vector<Searcher::Response> Searcher::search(const scalar_t* x_) {
 	auto coarse_code = model.predict_coarse(x_, 128);
-	printf("cc = %d, %d (%d)\n", coarse_code[0], coarse_code[1], coarse_code.size);
 
 	return search_in(coarse_code, x_, 128);
 }
 
 std::vector<Searcher::Response> Searcher::search_in(const Model::Codes& coarse_code, const scalar_t* x_, const size_t sz) {
 	auto& index = get_cell(coarse_code);
-	auto& index_codes = index.vectors;
+	auto cluster_size = index.ids.size();
+	const auto& index_codes_ = index.vectors;
 
-	if (index_codes.empty())
+	if (cluster_size == 0)
 		return std::vector<Response>();
-
+	
 	Searcher::DistanceCache distance_cache;
 
 	using i_d = std::pair<uint, float>;
 
-	std::vector<i_d> distances(index_codes.size());
+	std::vector<i_d> distances(cluster_size);
 
 	// calculate relative distances for all vectors in cluster
-	uint32_t c = 0;
-	for (auto& e: distances) {
-		e.second = distance(x_, sz, coarse_code, index_codes[c], distance_cache);
-		e.first = c++;
-	};
+	all_distances<<<1, 1>>>(model, x_, sz, coarse_code, cluster_size, index_codes_);
+	
+	// uint32_t c = 0;
+	// for (auto& e: distances) {
+	// 	e.second = distance(x_, sz, coarse_code, index_codes[c], distance_cache);
+	// 	e.first = c++;
+	// };
 
 	// // take top N
 	// std::partial_sort(

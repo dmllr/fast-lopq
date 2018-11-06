@@ -1,6 +1,7 @@
 #include "device.cuh"
 
 #include <cstdint>
+#include <vector>
 #include <iostream>
 #include <fstream>
 #include <chrono>
@@ -25,14 +26,23 @@ struct Searcher_ final : public lopq::gpu::Searcher {
 		std::string id;
 
 		std::ifstream raw_index(index_path);
+		std::vector<lopq::gpu::Model::Codes> vectors;
+		std::cout << "    - to RAM\n";
 		while (raw_index >> code_string >> id) {
-
 			lopq::gpu::Model::Codes fine_code(16);
 			for (int i = 0; i < 16; ++i)
 				sscanf(code_string.c_str() + 2 * i, "%2hhX", &fine_code[i]);
 
 			cluster.ids.emplace_back(id);
-			cluster.vectors.emplace_back(fine_code);
+			vectors.emplace_back(fine_code);
+		}
+		
+		std::cout << "    - to device\n";
+		cudaMalloc((void**)&cluster.vectors, 16 * vectors.size() * sizeof(uint8_t));
+		uint32_t c = 0;
+		for (auto v : vectors) {
+			cublasSetVector(16, sizeof(uint8_t), &v[0], 1, &cluster.vectors[c * 16], 1);
+			c++;
 		}
 	}
 

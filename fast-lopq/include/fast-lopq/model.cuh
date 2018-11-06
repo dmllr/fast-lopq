@@ -76,7 +76,6 @@ struct Model final {
 	Codes predict_fine(const scalar_t* x_, const uint32_t sz, const Codes& coarse_code) const;
 	SubquantizerDistances subquantizer_distances(const scalar_t* x_, const size_t sz, const Codes& coarse_code, uint32_t split) const;
 
-private:
 	uint32_t num_clusters = 0;
 
 	scalar_t** Cs;
@@ -86,9 +85,14 @@ private:
 
 	cublasHandle_t handle;
 
+private:
 	uint8_t predict_cluster(const scalar_t* x, const uint32_t sz, const scalar_t* centroids, const uint32_t csz) const;
 	CUVector project(const scalar_t* x, const uint32_t sz, const Codes& coarse_code) const;
 };
+
+
+__device__
+void subquantizer_distances(const Model& model, const scalar_t* x_, const size_t sz, const uint8_t* coarse_code, uint32_t split);
 
 } // gpu
 } // lopq
