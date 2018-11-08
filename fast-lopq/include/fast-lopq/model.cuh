@@ -92,7 +92,7 @@ private:
 
 
 __device__
-void subquantizer_distances(const Model& model, const scalar_t* x_, const size_t sz, const uint8_t* coarse_code, uint32_t split);
+void subquantizer_distances(const Model& model, scalar_t* distances_, const scalar_t* x_, const size_t sz, const uint8_t* coarse_code, const uint32_t split);
 
 } // gpu
 } // lopq

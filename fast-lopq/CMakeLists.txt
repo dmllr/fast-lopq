@@ -24,7 +24,7 @@ target_link_libraries(fast-lopq
     ext-blaze
     libprotobuf
     cublas
-    cublas_device
+    # cublas_device
 )
 
 target_include_directories(fast-lopq

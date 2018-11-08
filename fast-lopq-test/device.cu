@@ -103,11 +103,15 @@ void test_(const std::string& proto_path, const std::string& index_path) {
 	cudaMalloc((void**)&x_, sz * sizeof(scalar_t));
 	cublasSetVector(sz, sizeof(scalar_t), x, 1, x_, 1);
 
+	Searcher_ searcher(handle, index_path);
+	std::cout << " * loading model\n";
+	searcher.load_model(proto_path);
+
 	// printf(" * loading gpu model\n");
 	// lopq::gpu::Model model(handle);
 	// model.load(proto_path);
 
-	// auto coarse = model.predict_coarse(x_, sz);
+	auto coarse = searcher.model.predict_coarse(x_, sz);
 	// std::cout << "   - predicted coarse codes: ";
 	// for (uint8_t i = 0; i < 2; ++i)
 	// 	std::cout << std::hex << (int)coarse[i] << std::dec << ' ';
@@ -119,14 +123,13 @@ void test_(const std::string& proto_path, const std::string& index_path) {
 	// 	std::cout << std::hex << (int)fine[i] << std::dec << ' ';
 	// std::cout << '\n';
 
-	// auto sd = model.subquantizer_distances(x_, sz, coarse, 0);
+	// auto sd = searcher.model.subquantizer_distances(x_, sz, coarse, 0);
 	// std::cout << "    - subquantizer distances: " << sd.size << "x" << sd[0].size << "\n";
+	// std::cout << "    : " << sd[0][0] << "\n";
+
 
 	std::cout << "2. Testing of: LOPQ Searcher\n";
 
-	Searcher_ searcher(handle, index_path);
-	std::cout << " * loading model\n";
-	searcher.load_model(proto_path);
 
 	std::cout << " * searching...\n";
 	auto t0 = std::chrono::steady_clock::now();

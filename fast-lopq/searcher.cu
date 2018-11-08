@@ -7,24 +7,44 @@
 #include <memory>
 #include <cassert>
 
+#include <iostream>
 
-namespace {
-
-__global__
-void all_distances(const lopq::gpu::Model& model, const scalar_t* x_, const size_t sz, const lopq::gpu::Model::Codes& coarse_code, const int n, const uint8_t* vectors_) {
-	int idx = blockIdx.x * blockDim.x + threadIdx.x;
-	int stride = blockDim.x * gridDim.x;
-	for (int i = idx; i < n; i += stride) {
-		// lopq::gpu::subquantizer_distances(model, x_, sz, coarse_code.x, 0);
-		auto distance = 0;
-	}
-}
-
-} // namespace
-
+#define BLOCK_SIZE 32
 
 namespace lopq {
 namespace gpu {
+
+__device__
+scalar_t distance(const lopq::gpu::Model& model, const scalar_t* x_, const size_t sz, const lopq::gpu::Model::Codes& coarse_code, const uint8_t* fine_code_) {
+	scalar_t D = 0.0;
+
+	scalar_t* d0_ = (scalar_t*)malloc(model.num_fine_splits * model.num_clusters);
+	lopq::gpu::subquantizer_distances(model, d0_, x_, sz, coarse_code.x, 0);
+	auto d0s = 128;  // TODO replace 128
+
+	scalar_t* d1_ = (scalar_t*)malloc(model.num_fine_splits * model.num_clusters);
+	lopq::gpu::subquantizer_distances(model, d1_, x_, sz, coarse_code.x, 1);
+
+	for (uint32_t i = 0; i < model.num_fine_splits; ++i) {
+		auto& e = fine_code_[i];
+		D += (i < d0s) ? d0_[i * model.num_clusters + e] : d1_[(i - d0s) * model.num_clusters + e];
+	};
+	
+	free(d0_);
+	free(d1_);
+
+	return D;
+}
+
+__global__
+void all_distances(const lopq::gpu::Model& model, const scalar_t* x_, const size_t sz, const lopq::gpu::Model::Codes& coarse_code, const int n, const uint8_t* vectors_, scalar_t* distances_) {
+	int idx = blockIdx.x * blockDim.x + threadIdx.x;
+	int stride = blockDim.x * gridDim.x;
+	for (int i = idx; i < n; i += stride) {
+		auto fine_code_ = &vectors_[i * 16];  // TODO replace 16
+		distances_[i] = distance(model, x_, sz, coarse_code, fine_code_);
+	}
+}
 
 Searcher::Searcher(cublasHandle_t handle) : handle(handle) {
 	Model m(handle);
@@ -51,7 +71,7 @@ scalar_t Searcher::distance(const scalar_t* x_, const size_t sz, const Model::Co
 
 	for (uint32_t i = 0; i < model.num_fine_splits; ++i) {
 		auto& e = fine_code[i];
-		// D += (i < d0s) ? d0[i][e] : d1[i - d0s][e];
+		D += (i < d0s) ? d0[i][e] : d1[i - d0s][e];
 	};
 
 	return D;
@@ -78,30 +98,43 @@ std::vector<Searcher::Response> Searcher::search_in(const Model::Codes& coarse_c
 	std::vector<i_d> distances(cluster_size);
 
 	// calculate relative distances for all vectors in cluster
-	all_distances<<<1, 1>>>(model, x_, sz, coarse_code, cluster_size, index_codes_);
-	
-	// uint32_t c = 0;
-	// for (auto& e: distances) {
-	// 	e.second = distance(x_, sz, coarse_code, index_codes[c], distance_cache);
-	// 	e.first = c++;
-	// };
+	scalar_t ldistances[cluster_size];
+	for (int i = 0; i < 4; ++i)
+		ldistances[i] = 11.99;
+	std::cout << "cluster_size: " << cluster_size << "\n";
 
-	// // take top N
-	// std::partial_sort(
-	//		distances.begin(), distances.begin() + quota, distances.end(),
-	//		[](i_d i1, i_d i2) {
-	//			return i1.second < i2.second;
-	//		}
-	// );
+	scalar_t* distances_;
+	cudaMalloc((void**)&distances_, cluster_size * sizeof(scalar_t));
+	all_distances<<<(cluster_size / 2 + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(model, x_, sz, coarse_code, cluster_size, index_codes_, distances_);
+	
+	cudaMemcpy(distances_, ldistances, cluster_size * sizeof(scalar_t), cudaMemcpyDeviceToHost);
+	
+	std::cout << "ldistances: ";
+	for (int i = 0; i < 4; ++i)
+		std::cout << ldistances[i] << " ";
+	std::cout << "\n";
+	
+	uint32_t c = 0;
+	for (auto& e: distances) {
+		e.second = ldistances[c];
+		e.first = c++;
+	};
+
+	 // take top N
+	 std::partial_sort(
+			distances.begin(), distances.begin() + 12, distances.end(),
+			[](i_d i1, i_d i2) {
+				return i1.second < i2.second;
+			}
+	 );
 
 	std::vector<Searcher::Response> top;
 
-	// assert(quota < distances.size()&&  " in Searcher::search");
-	// top.reserve(quota);
-	// std::for_each(distances.begin(), std::next(distances.begin(), quota), [&](auto& e) {
-	//	assert(e.first < index.ids.size()&&  " in Searcher::search");
-	//	top.emplace_back(Response(index.ids[e.first]));
-	// });
+	 top.reserve(12);
+	 
+	 for(int i = 0; i < 12; ++i) {
+		top.emplace_back(Response(index.ids[distances[i].first]));
+	 }
 
 	return top;
 }

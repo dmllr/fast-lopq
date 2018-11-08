@@ -15,6 +15,7 @@ namespace gpu {
 
 struct Searcher {
 	// inline static uint32_t quota = 12;
+	Model model = 0;
 
 	Searcher(cublasHandle_t handle);
 
@@ -41,7 +42,6 @@ protected:
 	virtual Cluster& get_cell(const Model::Codes& coarse_code) = 0;
 
 private:
-	Model model = 0;
 	std::unordered_map<int, Cluster> clusters;
 
 	cublasHandle_t handle;
