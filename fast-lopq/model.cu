@@ -105,27 +105,27 @@ void gemv(const scalar_t* __restrict__ A_, const scalar_t* __restrict__ x_, scal
 		y_[tid] = yv_;
 }
 
-__device__
-void project(const Model& model, scalar_t* px_, const scalar_t* x_, const uint32_t sz, const uint8_t* coarse_code) {
-	uint32_t split_size = sz / model.num_coarse_splits;
+// __device__
+// void project(const Model& model, scalar_t* px_, const scalar_t* x_, const uint32_t sz, const uint8_t* coarse_code) {
+// 	uint32_t split_size = sz / model.num_coarse_splits;
 
-	scalar_t* r_ = (scalar_t*)malloc(sz);
-	for (uint32_t split = 0; split < model.num_coarse_splits; ++split) {
-		auto& cluster = coarse_code[split];
+// 	scalar_t* r_ = (scalar_t*)malloc(sz);
+// 	for (uint32_t split = 0; split < model.num_coarse_splits; ++split) {
+// 		auto& cluster = coarse_code[split];
 
-		residual<<<1, split_size>>>(&r_[split * split_size], &x_[split * split_size], split_size, cluster, model.Cs[split], model.num_clusters, model.mus[split][cluster]);
+// 		residual<<<1, split_size>>>(&r_[split * split_size], &x_[split * split_size], split_size, cluster, model.Cs[split], model.num_clusters, model.mus[split][cluster]);
 
-		// Can't use cublas[S,D]gemv here, cause of cublas_device library slows down *all* memset and memcpy operations
+// 		// Can't use cublas[S,D]gemv here, cause of cublas_device library slows down *all* memset and memcpy operations
 
-		// const scalar_t alfa=1.0;
-		// const scalar_t beta=0.0;
-		// cublasgemv(model.handle, CUBLAS_OP_N, split_size, split_size, &alfa, model.Rs[split][cluster], split_size, &r_[split * split_size], 1, &beta, &px_[split * split_size], 1);
+// 		// const scalar_t alfa=1.0;
+// 		// const scalar_t beta=0.0;
+// 		// cublasgemv(model.handle, CUBLAS_OP_N, split_size, split_size, &alfa, model.Rs[split][cluster], split_size, &r_[split * split_size], 1, &beta, &px_[split * split_size], 1);
 
-		gemv<<<(split_size / 2 + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(model.Rs[split][cluster], &r_[split * split_size], &px_[split * split_size], split_size, split_size);
-	}
+// 		gemv<<<(split_size / 2 + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(model.Rs[split][cluster], &r_[split * split_size], &px_[split * split_size], split_size, split_size);
+// 	}
 
-	free(r_);
-}
+// 	free(r_);
+// }
 
 __device__ __host__
 void Model::project_dododo(scalar_t* px_, const scalar_t* x_, const uint32_t sz, const uint8_t* coarse_code) const {
@@ -173,29 +173,29 @@ void Model::subquantizer_distances_dododo(scalar_t* distances_, const scalar_t* 
 	}
 }
 
-__device__
-void subquantizer_distances(const Model& model, scalar_t* distances_, const scalar_t* x_, const size_t sz, const uint8_t* coarse_code, const uint32_t split) {
-	scalar_t* px_ = (scalar_t*)malloc(sz);
-	memset(px_, 0.0, sz * sizeof(scalar_t));
+// __device__
+// void subquantizer_distances(const Model& model, scalar_t* distances_, const scalar_t* x_, const size_t sz, const uint8_t* coarse_code, const uint32_t split) {
+// 	scalar_t* px_ = (scalar_t*)malloc(sz);
+// 	memset(px_, 0.0, sz * sizeof(scalar_t));
 
-	project(model, px_, x_, sz, coarse_code);
+// 	project(model, px_, x_, sz, coarse_code);
 
-	uint32_t split_size = sz / model.num_coarse_splits;
+// 	uint32_t split_size = sz / model.num_coarse_splits;
 
-	auto sx_ = &px_[split * split_size];  // size = split_size
+// 	auto sx_ = &px_[split * split_size];  // size = split_size
 
-	uint32_t subsplit_size = split_size / model.num_fine_splits;
+// 	uint32_t subsplit_size = split_size / model.num_fine_splits;
 
-	// scalar_t* distances_ = (scalar_t*)malloc(model.num_fine_splits * model.num_clusters);
-	memset(distances_, 0.0, model.num_fine_splits * model.num_clusters * sizeof(scalar_t));
+// 	// scalar_t* distances_ = (scalar_t*)malloc(model.num_fine_splits * model.num_clusters);
+// 	memset(distances_, 0.0, model.num_fine_splits * model.num_clusters * sizeof(scalar_t));
 	
-	for (uint32_t subsplit = 0; subsplit < model.num_fine_splits; ++subsplit) {
-		auto fx_ = &sx_[subsplit * subsplit_size];  // size = subsplit_size
-		auto ds_ = &distances_[subsplit * model.num_clusters];
+// 	for (uint32_t subsplit = 0; subsplit < model.num_fine_splits; ++subsplit) {
+// 		auto fx_ = &sx_[subsplit * subsplit_size];  // size = subsplit_size
+// 		auto ds_ = &distances_[subsplit * model.num_clusters];
 
-		directions<<<1, model.num_clusters>>>(fx_, model.subquantizers[split][subsplit], subsplit_size, ds_);
-	}
-}
+// 		directions<<<1, model.num_clusters>>>(fx_, model.subquantizers[split][subsplit], subsplit_size, ds_);
+// 	}
+// }
 
 
 Model::Model(cublasHandle_t handle) : handle(handle) {

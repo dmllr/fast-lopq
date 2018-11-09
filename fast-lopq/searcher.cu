@@ -66,7 +66,6 @@ Searcher::Searcher(cublasHandle_t handle) : handle(handle) {
 	model = m;
 }
 
-__host__ __device__
 void Searcher::load_model(const std::string& proto_path) {
 	model.load(proto_path);
 }
@@ -93,14 +92,12 @@ scalar_t Searcher::distance(const scalar_t* x_, const size_t sz, const Model::Co
 	return D;
 }
 
-__host__
 std::vector<Searcher::Response> Searcher::search(const scalar_t* x_) {
 	auto coarse_code = model.predict_coarse(x_, 128);
 
 	return search_in(coarse_code, x_, 128);
 }
 
-__host__
 std::vector<Searcher::Response> Searcher::search_in(const Model::Codes& coarse_code, const scalar_t* x_, const size_t sz) {
 	auto& index = get_cell(coarse_code);
 
