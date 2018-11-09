@@ -21,6 +21,7 @@ typedef float scalar_t;
 namespace lopq {
 namespace gpu {
 
+__host__ __device__
 struct Model final {
 	uint32_t num_coarse_splits = 2;
 	uint32_t num_fine_splits = 16;
@@ -76,6 +77,9 @@ struct Model final {
 	Codes predict_fine(const scalar_t* x_, const uint32_t sz, const Codes& coarse_code) const;
 	SubquantizerDistances subquantizer_distances(const scalar_t* x_, const size_t sz, const Codes& coarse_code, uint32_t split) const;
 
+	__device__ __host__
+	void subquantizer_distances_dododo(scalar_t* distances_, const scalar_t* x_, const size_t sz, const uint8_t* coarse_code, const uint32_t split) const;
+
 	uint32_t num_clusters = 0;
 
 	scalar_t** Cs;
@@ -88,11 +92,8 @@ struct Model final {
 private:
 	uint8_t predict_cluster(const scalar_t* x, const uint32_t sz, const scalar_t* centroids, const uint32_t csz) const;
 	CUVector project(const scalar_t* x, const uint32_t sz, const Codes& coarse_code) const;
+	void project_dododo(scalar_t* px_, const scalar_t* x_, const uint32_t sz, const uint8_t* coarse_code) const;
 };
-
-
-__device__
-void subquantizer_distances(const Model& model, scalar_t* distances_, const scalar_t* x_, const size_t sz, const uint8_t* coarse_code, const uint32_t split);
 
 } // gpu
 } // lopq

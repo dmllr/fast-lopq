@@ -13,6 +13,7 @@
 namespace lopq {
 namespace gpu {
 
+__host__ __device__
 struct Searcher {
 	// inline static uint32_t quota = 12;
 	Model model = 0;

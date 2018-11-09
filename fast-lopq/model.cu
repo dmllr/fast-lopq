@@ -115,14 +115,62 @@ void project(const Model& model, scalar_t* px_, const scalar_t* x_, const uint32
 
 		residual<<<1, split_size>>>(&r_[split * split_size], &x_[split * split_size], split_size, cluster, model.Cs[split], model.num_clusters, model.mus[split][cluster]);
 
-		// cublas_device library slows down all memset and memcpy operation
+		// Can't use cublas[S,D]gemv here, cause of cublas_device library slows down *all* memset and memcpy operations
+
 		// const scalar_t alfa=1.0;
 		// const scalar_t beta=0.0;
 		// cublasgemv(model.handle, CUBLAS_OP_N, split_size, split_size, &alfa, model.Rs[split][cluster], split_size, &r_[split * split_size], 1, &beta, &px_[split * split_size], 1);
+
 		gemv<<<(split_size / 2 + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(model.Rs[split][cluster], &r_[split * split_size], &px_[split * split_size], split_size, split_size);
 	}
 
 	free(r_);
+}
+
+__device__ __host__
+void Model::project_dododo(scalar_t* px_, const scalar_t* x_, const uint32_t sz, const uint8_t* coarse_code) const {
+	uint32_t split_size = sz / num_coarse_splits;
+
+	scalar_t* r_ = (scalar_t*)malloc(sz);
+	for (uint32_t split = 0; split < num_coarse_splits; ++split) {
+		auto& cluster = coarse_code[split];
+
+		residual<<<1, split_size>>>(&r_[split * split_size], &x_[split * split_size], split_size, cluster, Cs[split], num_clusters, mus[split][cluster]);
+
+		// Can't use cublas[S,D]gemv here, cause of cublas_device library slows down *all* memset and memcpy operations
+
+		// const scalar_t alfa=1.0;
+		// const scalar_t beta=0.0;
+		// cublasgemv(model.handle, CUBLAS_OP_N, split_size, split_size, &alfa, model.Rs[split][cluster], split_size, &r_[split * split_size], 1, &beta, &px_[split * split_size], 1);
+
+		gemv<<<(split_size / 2 + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(Rs[split][cluster], &r_[split * split_size], &px_[split * split_size], split_size, split_size);
+	}
+
+	free(r_);
+}
+
+__device__ __host__
+void Model::subquantizer_distances_dododo(scalar_t* distances_, const scalar_t* x_, const size_t sz, const uint8_t* coarse_code, const uint32_t split) const {
+	scalar_t* px_ = (scalar_t*)malloc(sz);
+	memset(px_, 0.0, sz * sizeof(scalar_t));
+
+	project_dododo(px_, x_, sz, coarse_code);
+
+	uint32_t split_size = sz / num_coarse_splits;
+
+	auto sx_ = &px_[split * split_size];  // size = split_size
+
+	uint32_t subsplit_size = split_size / num_fine_splits;
+
+	// scalar_t* distances_ = (scalar_t*)malloc(model.num_fine_splits * model.num_clusters);
+	memset(distances_, 0.0, num_fine_splits * num_clusters * sizeof(scalar_t));
+	
+	for (uint32_t subsplit = 0; subsplit < num_fine_splits; ++subsplit) {
+		auto fx_ = &sx_[subsplit * subsplit_size];  // size = subsplit_size
+		auto ds_ = &distances_[subsplit * num_clusters];
+
+		directions<<<1, num_clusters>>>(fx_, subquantizers[split][subsplit], subsplit_size, ds_);
+	}
 }
 
 __device__
