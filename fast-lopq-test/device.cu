@@ -20,30 +20,30 @@ struct Searcher_ final : public lopq::gpu::Searcher {
 	}
 
 	void load_index_(const std::string& index_path) {
-		// std::cout << " * loading index into memoory\n";
+		std::cout << " * loading index into memoory\n";
 
-		// std::string code_string;
-		// std::string id;
+		std::string code_string;
+		std::string id;
 
-		// std::ifstream raw_index(index_path);
-		// std::vector<lopq::gpu::Model::Codes> vectors;
-		// std::cout << "    - to RAM\n";
-		// while (raw_index >> code_string >> id) {
-		// 	lopq::gpu::Model::Codes fine_code(16);
-		// 	for (int i = 0; i < 16; ++i)
-		// 		sscanf(code_string.c_str() + 2 * i, "%2hhX", &fine_code[i]);
+		std::ifstream raw_index(index_path);
+		std::vector<lopq::gpu::Model::Codes> vectors;
+		std::cout << "    - to RAM\n";
+		while (raw_index >> code_string >> id) {
+			lopq::gpu::Model::Codes fine_code(16);
+			for (int i = 0; i < 16; ++i)
+				sscanf(code_string.c_str() + 2 * i, "%2hhX", &fine_code[i]);
 
-		// 	cluster.ids.emplace_back(id);
-		// 	vectors.emplace_back(fine_code);
-		// }
+			cluster.ids.emplace_back(id);
+			vectors.emplace_back(fine_code);
+		}
 		
-		// std::cout << "    - to device\n";
-		// cudaMalloc((void**)&cluster.vectors, 16 * vectors.size() * sizeof(uint8_t));
-		// uint32_t c = 0;
-		// for (auto v : vectors) {
-		// 	cublasSetVector(16, sizeof(uint8_t), &v[0], 1, &cluster.vectors[c * 16], 1);
-		// 	c++;
-		// }
+		std::cout << "    - to device\n";
+		cudaMalloc((void**)&cluster.vectors, 16 * vectors.size() * sizeof(uint8_t));
+		uint32_t c = 0;
+		for (auto v : vectors) {
+			cublasSetVector(16, sizeof(uint8_t), &v[0], 1, &cluster.vectors[c * 16], 1);
+			c++;
+		}
 	}
 
 	lopq::gpu::Searcher::Cluster& get_cell(const lopq::gpu::Model::Codes& /*coarse_code*/) {
@@ -113,11 +113,8 @@ void test_(const std::string& proto_path, const std::string& index_path) {
 	std::cout << " * loading model\n";
 	searcher.load_model(proto_path);
 
-	// printf(" * loading gpu model\n");
-	// lopq::gpu::Model model(handle);
-	// model.load(proto_path);
-
 	auto coarse = searcher.model.predict_coarse(x_, sz);
+
 	// std::cout << "   - predicted coarse codes: ";
 	// for (uint8_t i = 0; i < 2; ++i)
 	// 	std::cout << std::hex << (int)coarse[i] << std::dec << ' ';

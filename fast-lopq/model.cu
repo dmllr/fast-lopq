@@ -108,12 +108,12 @@ void gemv(const scalar_t* __restrict__ A_, const scalar_t* __restrict__ x_, scal
 }
 
 __device__
-void project(const Model::Params* model, scalar_t* px_, const scalar_t* x_, const uint32_t sz, const uint8_t* coarse_code) {
+void project(const Model::Params* model, scalar_t* px_, const scalar_t* x_, const uint32_t sz, const uint8_t* coarse_code_) {
 	uint32_t split_size = sz / model->num_coarse_splits;
 
-	scalar_t* r_ = (scalar_t*)malloc(sz);
+	scalar_t* r_ = (scalar_t*)malloc(sz * sizeof(scalar_t));
 	for (uint32_t split = 0; split < model->num_coarse_splits; ++split) {
-		auto& cluster = coarse_code[split];
+		auto& cluster = coarse_code_[split];
 
 		residual<<<1, split_size>>>(&r_[split * split_size], &x_[split * split_size], split_size, cluster, model->Cs[split], model->num_clusters, model->mus[split][cluster]);
 
@@ -133,7 +133,7 @@ __device__
 void Model::project_dododo(scalar_t* px_, const scalar_t* x_, const uint32_t sz, const uint8_t* coarse_code) const {
 	uint32_t split_size = sz / cu->num_coarse_splits;
 
-	scalar_t* r_ = (scalar_t*)malloc(sz);
+	scalar_t* r_ = (scalar_t*)malloc(sz * sizeof(scalar_t));
 	for (uint32_t split = 0; split < cu->num_coarse_splits; ++split) {
 		auto& cluster = coarse_code[split];
 
@@ -153,7 +153,7 @@ void Model::project_dododo(scalar_t* px_, const scalar_t* x_, const uint32_t sz,
 
 __device__
 void Model::subquantizer_distances_dododo(scalar_t* distances_, const scalar_t* x_, const size_t sz, const uint8_t* coarse_code, const uint32_t split) const {
-	scalar_t* px_ = (scalar_t*)malloc(sz);
+	scalar_t* px_ = (scalar_t*)malloc(sz * sizeof(scalar_t));
 	memset(px_, 0.0, sz * sizeof(scalar_t));
 
 	project_dododo(px_, x_, sz, coarse_code);
@@ -164,7 +164,7 @@ void Model::subquantizer_distances_dododo(scalar_t* distances_, const scalar_t* 
 
 	uint32_t subsplit_size = split_size / cu->num_fine_splits;
 
-	// scalar_t* distances_ = (scalar_t*)malloc(model.num_fine_splits * model.num_clusters);
+	// scalar_t* distances_ = (scalar_t*)malloc(model.num_fine_splits * model.num_clusters * sizeof(scalar_t));
 	memset(distances_, 0.0, cu->num_fine_splits * cu->num_clusters * sizeof(scalar_t));
 	
 	for (uint32_t subsplit = 0; subsplit < cu->num_fine_splits; ++subsplit) {
@@ -176,11 +176,14 @@ void Model::subquantizer_distances_dododo(scalar_t* distances_, const scalar_t* 
 }
 
 __device__
-void subquantizer_distances(const Model::Params* model, scalar_t* distances_, const scalar_t* x_, const size_t sz, const uint8_t* coarse_code, const uint32_t split) {
-	scalar_t* px_ = (scalar_t*)malloc(sz);
+void subquantizer_distances(const Model::Params* model, scalar_t* distances_, const scalar_t* x_, const size_t sz, const uint8_t* coarse_code_, const uint32_t split) {
+	printf("here\n");
+	scalar_t* px_ = (scalar_t*)malloc(sz * sizeof(scalar_t));
 	memset(px_, 0.0, sz * sizeof(scalar_t));
+	printf("here memset\n");
 
-	project(model, px_, x_, sz, coarse_code);
+	project(model, px_, x_, sz, coarse_code_);
+	printf("here project\n");
 
 	uint32_t split_size = sz / model->num_coarse_splits;
 
@@ -188,7 +191,7 @@ void subquantizer_distances(const Model::Params* model, scalar_t* distances_, co
 
 	uint32_t subsplit_size = split_size / model->num_fine_splits;
 
-	// scalar_t* distances_ = (scalar_t*)malloc(model.num_fine_splits * model.num_clusters);
+	// scalar_t* distances_ = (scalar_t*)malloc(model.num_fine_splits * model.num_clusters * sizeof(scalar_t));
 	memset(distances_, 0.0, model->num_fine_splits * model->num_clusters * sizeof(scalar_t));
 	
 	for (uint32_t subsplit = 0; subsplit < model->num_fine_splits; ++subsplit) {
@@ -215,17 +218,48 @@ void t(const Model::Params* cu) {
 }
 
 __global__
-void cudaMallocModel(Model::Params* params, uint32_t num_coarse_splits) {
+void cudaMallocModel(Model::Params* params, uint32_t num_coarse_splits, uint32_t num_fine_splits, uint32_t num_clusters) {
 	params->num_coarse_splits = num_coarse_splits;
-	params->Cs = (scalar_t**)malloc(num_coarse_splits);
+	params->num_fine_splits = num_fine_splits;
+	params->num_clusters = num_clusters;
+	
+	params->Cs = (scalar_t**)malloc(num_coarse_splits * sizeof(scalar_t*));
+
+	params->Rs = (scalar_t***)malloc(2 * sizeof(scalar_t**));
+	for (uint32_t ri = 0; ri < 2; ++ri)
+		params->Rs[ri] = (scalar_t**)malloc(num_clusters * sizeof(scalar_t*));
+	
+	params->mus = (scalar_t***)malloc(2 * sizeof(scalar_t**));
+	for (uint32_t mui = 0; mui < 2; ++mui)
+		params->mus[mui] = (scalar_t**)malloc(num_clusters * sizeof(scalar_t*));
+	
+	params->subquantizers = (scalar_t***)malloc(2 * sizeof(scalar_t**));
+	for (uint32_t sui = 0; sui < 2; ++sui)
+		params->subquantizers[sui] = (scalar_t**)malloc(num_fine_splits * sizeof(scalar_t*));
 	
 	printf("1. cu->num_coarse_splits %d\n", params->num_coarse_splits);
+	printf("1. cu->num_fine_splits %d\n", params->num_fine_splits);
+	printf("1. cu->num_clusters %d\n", params->num_clusters);
 }
 
 __global__
-void model_setCs(Model::Params* cu, scalar_t* C_, uint32_t ci) {
+void model_setC(Model::Params* cu, scalar_t* C_, uint32_t ci) {
 	cu->Cs[ci] = C_;
-	printf("\tOK");
+}
+
+__global__
+void model_setR(Model::Params* cu, scalar_t* R_, uint32_t ri, uint32_t cluster) {
+	cu->Rs[ri][cluster] = R_;
+}
+
+__global__
+void model_setMu(Model::Params* cu, scalar_t* mu_, uint32_t mui, uint32_t cluster) {
+	cu->Rs[mui][cluster] = mu_;
+}
+
+__global__
+void model_setSubquantizer(Model::Params* cu, scalar_t* S_, uint32_t sui, uint32_t c) {
+	cu->subquantizers[sui][c] = S_;
 }
 
 void Model::load(const std::string& proto_path) {
@@ -244,7 +278,7 @@ void Model::load(const std::string& proto_path) {
 	//TODO Check for cuda/cublas response statuses
 
 	cudaMalloc((void**)&cu, sizeof(cu));
-	cudaMallocModel<<<1, 1>>>(cu, hu.num_coarse_splits);
+	cudaMallocModel<<<1, 1>>>(cu, hu.num_coarse_splits, hu.num_fine_splits, hu.num_clusters);
 	cudaCheckError();
 
 	hu.Cs = new scalar_t*[hu.num_coarse_splits];
@@ -264,12 +298,9 @@ void Model::load(const std::string& proto_path) {
 		cudaMalloc((void**)&C_, w * h * sizeof(scalar_t));
 		cudaMemcpy(C_, C, h * w * sizeof(scalar_t), cudaMemcpyHostToDevice);
 
-		// model_setCs<<<1, 1>>>(params, C_, ci);
-		// cudaCheckError();
-
-		model_setCs<<<1, 1>>>(cu, C_, ci);
-		cudaCheckError();
+		model_setC<<<1, 1>>>(cu, C_, ci);
 	}
+	cudaCheckError();
 
 	// TODO check 2
 	hu.Rs = new scalar_t**[2];
@@ -295,7 +326,10 @@ void Model::load(const std::string& proto_path) {
 		auto& R_ = hu.Rs[c / rs_half][c % rs_half];
 		cudaMalloc((void**)&R_, w * h * sizeof(*R_));
 		cublasSetMatrix(w, h, sizeof(scalar_t), R, w, R_, w);
+		
+		model_setR<<<1, 1>>>(cu, R_, c / rs_half, c % rs_half);
 	}
+	cudaCheckError();
 
 	hu.mus = new scalar_t**[2];
 	uint32_t mus_size = lopq_params.mus_size();
@@ -316,7 +350,10 @@ void Model::load(const std::string& proto_path) {
 		auto& mu_ = hu.mus[c / mus_half][c % mus_half];
 		cudaMalloc((void**)&mu_, sz * sizeof(scalar_t));
 		cublasSetVector(sz, sizeof(scalar_t), muc, 1, mu_, 1);
+		
+		model_setR<<<1, 1>>>(cu, mu_, c / mus_half, c % mus_half);
 	}
+	cudaCheckError();
 
 	hu.subquantizers = new scalar_t**[2];
 	uint32_t subs_size = lopq_params.subs_size();
@@ -341,65 +378,20 @@ void Model::load(const std::string& proto_path) {
 		auto& S_ = hu.subquantizers[c / subs_half][c % subs_half];
 		cudaMalloc((void**)&S_, w * h * sizeof(*S_));
 		cublasSetMatrix(w, h, sizeof(scalar_t), S, w, S_, w);
+		
+		model_setSubquantizer<<<1, 1>>>(cu, S_, c / subs_half, c % subs_half);
 	}
+	cudaCheckError();
 	std::cout << '\n';
 
 	cudaThreadSynchronize();
 
-	// Params cucu;
 
-	// cucu.num_coarse_splits = 99;
-
-	// cudaMalloc((void**)&cucu.Cs, hu.num_coarse_splits * sizeof(hu.Cs[0]));
-	// cudaMemcpy(cucu.Cs, hu.Cs, hu.num_coarse_splits * sizeof(hu.Cs[0]), cudaMemcpyHostToDevice);
-
-	// /*
-	// scalar_t*** rs_ = new scalar_t**[2];
-	// for (uint32_t ri = 0; ri < 2; ++ri) {
-	// 	cudaMalloc((void**)&rs_[ri], rs_half * sizeof(hu.Rs[ri][0]));
-	// 	cudaMemcpy(rs_[ri], hu.Rs[ri], rs_half * sizeof(hu.Rs[ri][0]), cudaMemcpyHostToDevice);
-		
-	// 	// cudaMalloc((void**)&cucu.Rs[ri], rs_half * sizeof(hu.Rs[ri][0]));
-	// }
-	// cudaMalloc((void**)&cucu.Rs, 2 * sizeof(hu.Rs[0]));
-	// cudaMemcpy(cucu.Rs, rs_, 2 * sizeof(hu.Rs[0]), cudaMemcpyHostToDevice);
-	
-	// cudaError err = cudaGetLastError();
-	// if ( cudaSuccess != err ) {
-	// 	printf("cudaCheckError() : %s\n", cudaGetErrorString(err));
-	// 	exit(-1);
-	// }
-	// */
-
-	// // scalar_t** cu_Cs;
-	// // cudaMemcpy(&cu_Cs, &cu->Cs[0], sizeof(scalar_t**), cudaMemcpyDeviceToHost);
-	// // // cudaMemcpy(&cupt->Cs, &hu.Cs, hu.num_coarse_splits * sizeof(hu.Cs[0]), cudaMemcpyHostToDevice);
-	// // printf("Copied\n");
-
-	// cudaThreadSynchronize();
-
-	// // cudaMalloc((void**)&cu->Cs, hu.num_coarse_splits * sizeof(hu.Cs[0]));
-	// // cudaMemcpy(&cu->Cs, &hu.Cs, hu.num_coarse_splits * sizeof(scalar_t), cudaMemcpyHostToDevice);
-
-
-	// cudaMalloc((void**)&cu, sizeof(cu));
-	// // cudaMemcpy(cu, &cucu, sizeof(cu), cudaMemcpyHostToDevice);
-	// scalar_t** temp = 0;
-	// cudaMemcpy(&temp, &cucu.Cs, sizeof(scalar_t*), cudaMemcpyDeviceToHost);
-	// // cudaMemcpy(&temp, &hu.Cs, hu.num_coarse_splits * sizeof(hu.Cs[0]), cudaMemcpyHostToDevice);
-
-	// cudaError err = cudaGetLastError();
-	// if ( cudaSuccess != err ) {
-	// 	printf("cudaCheckError() : %s\n", cudaGetErrorString(err));
-	// 	exit(-1);
-	// }
-
-	std::cout << '\n';
-	printf("hu.num_coarse_splits %d\n", hu.num_coarse_splits);
-	t<<<1,1>>>(cu);
-	cudaCheckError();
-
-	std::cout << '\n';
+	// std::cout << '\n';
+	// printf("hu.num_coarse_splits %d\n", hu.num_coarse_splits);
+	// t<<<1, 1>>>(cu);
+	// cudaCheckError();
+	// std::cout << '\n';
 }
 
 Model::Codes Model::predict_coarse(const scalar_t* x_, const uint32_t sz) const {
