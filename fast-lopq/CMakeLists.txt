@@ -6,6 +6,8 @@ add_library(fast-lopq
     searcher.cpp
     searcher.cu
 
+    utils/utils.cuh
+
     include/fast-lopq/model.h
     include/fast-lopq/model.cuh
     include/fast-lopq/searcher.h

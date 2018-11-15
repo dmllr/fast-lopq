@@ -20,30 +20,30 @@ struct Searcher_ final : public lopq::gpu::Searcher {
 	}
 
 	void load_index_(const std::string& index_path) {
-		std::cout << " * loading index into memoory\n";
+		// std::cout << " * loading index into memoory\n";
 
-		std::string code_string;
-		std::string id;
+		// std::string code_string;
+		// std::string id;
 
-		std::ifstream raw_index(index_path);
-		std::vector<lopq::gpu::Model::Codes> vectors;
-		std::cout << "    - to RAM\n";
-		while (raw_index >> code_string >> id) {
-			lopq::gpu::Model::Codes fine_code(16);
-			for (int i = 0; i < 16; ++i)
-				sscanf(code_string.c_str() + 2 * i, "%2hhX", &fine_code[i]);
+		// std::ifstream raw_index(index_path);
+		// std::vector<lopq::gpu::Model::Codes> vectors;
+		// std::cout << "    - to RAM\n";
+		// while (raw_index >> code_string >> id) {
+		// 	lopq::gpu::Model::Codes fine_code(16);
+		// 	for (int i = 0; i < 16; ++i)
+		// 		sscanf(code_string.c_str() + 2 * i, "%2hhX", &fine_code[i]);
 
-			cluster.ids.emplace_back(id);
-			vectors.emplace_back(fine_code);
-		}
+		// 	cluster.ids.emplace_back(id);
+		// 	vectors.emplace_back(fine_code);
+		// }
 		
-		std::cout << "    - to device\n";
-		cudaMalloc((void**)&cluster.vectors, 16 * vectors.size() * sizeof(uint8_t));
-		uint32_t c = 0;
-		for (auto v : vectors) {
-			cublasSetVector(16, sizeof(uint8_t), &v[0], 1, &cluster.vectors[c * 16], 1);
-			c++;
-		}
+		// std::cout << "    - to device\n";
+		// cudaMalloc((void**)&cluster.vectors, 16 * vectors.size() * sizeof(uint8_t));
+		// uint32_t c = 0;
+		// for (auto v : vectors) {
+		// 	cublasSetVector(16, sizeof(uint8_t), &v[0], 1, &cluster.vectors[c * 16], 1);
+		// 	c++;
+		// }
 	}
 
 	lopq::gpu::Searcher::Cluster& get_cell(const lopq::gpu::Model::Codes& /*coarse_code*/) {
@@ -52,6 +52,12 @@ struct Searcher_ final : public lopq::gpu::Searcher {
 
 	lopq::gpu::Searcher::Cluster cluster;
 };
+
+__global__
+void t(const lopq::gpu::Model::Params& cu) {
+	if(threadIdx.x == 0 && threadIdx.y == 0)
+		printf("cu.num_coarse_splits %d\n", cu.num_coarse_splits);
+}
 
 void test_(const std::string& proto_path, const std::string& index_path) {
 	cublasStatus_t stat;
@@ -69,7 +75,7 @@ void test_(const std::string& proto_path, const std::string& index_path) {
 			-5.15871673e-01,  2.96075179e-01, -1.29803211e-01,  7.89666891e-02,
 			-2.13094767e-02,  1.22119331e-01,  8.73494489e-02,  6.42005949e-02,
 			-3.91221325e-02,  6.10671771e-02,  5.30999659e-02, -3.33499452e-02,
- 			 4.61418899e-02,  3.43788838e-02, -5.49158064e-02, -3.02026897e-02,
+			 4.61418899e-02,  3.43788838e-02, -5.49158064e-02, -3.02026897e-02,
 			 4.21869485e-02,  1.32635488e-02, -4.22456297e-02,  6.51733816e-02,
 			 1.90685661e-02,  2.25571052e-02, -8.67056093e-02, -8.27722468e-02,
 			 7.55270520e-02,  3.46607742e-02, -3.06546405e-02, -2.54700991e-02,

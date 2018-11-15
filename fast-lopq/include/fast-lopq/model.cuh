@@ -3,6 +3,8 @@
 #include <map>
 #include <string>
 #include <cstdint>
+
+#include <cuda_runtime.h>
 #include <cublas_v2.h>
 
 #ifndef USE_FP32
@@ -23,11 +25,18 @@ namespace gpu {
 
 __host__ __device__
 struct Model final {
-	uint32_t num_coarse_splits = 2;
-	uint32_t num_fine_splits = 16;
-	uint32_t num_clusters = 0;
-
 	Model(cublasHandle_t handle);
+
+	struct Params {
+		uint32_t num_coarse_splits = 2;
+		uint32_t num_fine_splits = 16;
+		uint32_t num_clusters = 0;
+
+		scalar_t** Cs;
+		scalar_t*** Rs;
+		scalar_t*** mus;
+		scalar_t*** subquantizers;
+	};
 
 	template <class T>
 	struct AbstractVector {
@@ -69,6 +78,9 @@ struct Model final {
 				cudaFree(x);
 		}
 	};
+	
+	Params hu;   // hybrid unit: CPU pointers for GPU memory
+	Params* cu;  // core unit
 
 	using Codes = Vector<uint8_t>;
 	using SubquantizerDistances = Vector<CUVector>;
@@ -82,19 +94,18 @@ struct Model final {
 	void subquantizer_distances_dododo(scalar_t* distances_, const scalar_t* x_, const size_t sz, const uint8_t* coarse_code, const uint32_t split) const;
 
 private:
-	scalar_t** Cs;
-	scalar_t*** Rs;
-	scalar_t*** mus;
-	scalar_t*** subquantizers;
-
 	cublasHandle_t handle;
-
+	
 	uint8_t predict_cluster(const scalar_t* x, const uint32_t sz, const scalar_t* centroids, const uint32_t csz) const;
 	CUVector project(const scalar_t* x, const uint32_t sz, const Codes& coarse_code) const;
 
 	__host__ __device__
 	void project_dododo(scalar_t* px_, const scalar_t* x_, const uint32_t sz, const uint8_t* coarse_code) const;
 };
+
+
+__device__
+void subquantizer_distances(const Model::Params* model, scalar_t* distances_, const scalar_t* x_, const size_t sz, const uint8_t* coarse_code, const uint32_t split);
 
 } // gpu
 } // lopq

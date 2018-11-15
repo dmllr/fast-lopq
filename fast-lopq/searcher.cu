@@ -15,18 +15,19 @@ namespace lopq {
 namespace gpu {
 
 __device__
-scalar_t distance(const lopq::gpu::Model& model, const scalar_t* x_, const size_t sz, const lopq::gpu::Model::Codes& coarse_code, const uint8_t* fine_code_) {
+scalar_t distance(const lopq::gpu::Model::Params* model, const scalar_t* x_, const size_t sz, const lopq::gpu::Model::Codes& coarse_code, const uint8_t* fine_code_) {
 	scalar_t D = 99.55;
 
-	printf("3. model.num_fine_splits, model.num_clusters: %d, %d\n", model.num_fine_splits, model.num_clusters);
+	printf("3. model.num_fine_splits, model.num_clusters: %d, %d\n", model->num_fine_splits, model->num_clusters);
 
 	printf("d0\n");
 	// scalar_t* d0_ = malloc(model.num_fine_splits * model.num_clusters * sizeof(scalar_t));
 	// auto d0_ = new scalar_t[model.num_fine_splits * model.num_clusters];
-	printf("%d, %d\n", model.num_fine_splits, model.num_clusters);
+	printf("%d, %d\n", model->num_fine_splits, model->num_clusters);
 	scalar_t d0_[8 * 256];
 	printf("malloc yes\n");
-	model.subquantizer_distances_dododo(d0_, x_, sz, coarse_code.x, 0);
+	// model.subquantizer_distances_dododo(d0_, x_, sz, coarse_code.x, 0);
+	subquantizer_distances(model, d0_, x_, sz, coarse_code.x, 0);
 	printf("subq yes\n");
 	auto d0s = 128;  // TODO replace 128
 	printf("d0 yes\n");
@@ -50,8 +51,12 @@ scalar_t distance(const lopq::gpu::Model& model, const scalar_t* x_, const size_
 }
 
 __global__
-void all_distances(const lopq::gpu::Model& model, const scalar_t* x_, const size_t sz, const lopq::gpu::Model::Codes& coarse_code, const int n, const uint8_t* vectors_, scalar_t* distances_) {
-	printf("2. model.num_fine_splits, model.num_clusters: %d, %d\n", model.num_fine_splits, model.num_clusters);
+void all_distances(const lopq::gpu::Model::Params* model, const scalar_t* x_, const size_t sz, const lopq::gpu::Model::Codes& coarse_code, const int n, const uint8_t* vectors_, scalar_t* distances_) {
+	printf("all_distances\n");
+	printf("ptr of model %p\n", model);
+	printf("ptr of num_fine_splits %p\n", model->num_fine_splits);
+	printf("2. model.num_fine_splits, model.num_clusters: %d, %d\n", model->num_fine_splits, model->num_clusters);
+	printf("poooof***\n");
 
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 	int stride = blockDim.x * gridDim.x;
@@ -84,7 +89,7 @@ scalar_t Searcher::distance(const scalar_t* x_, const size_t sz, const Model::Co
 	if (d1.size == 0)
 		d1 = model.subquantizer_distances(x_, sz, coarse_code, 1);
 
-	for (uint32_t i = 0; i < model.num_fine_splits; ++i) {
+	for (uint32_t i = 0; i < model.hu.num_fine_splits; ++i) {
 		auto& e = fine_code[i];
 		D += (i < d0s) ? d0[i][e] : d1[i - d0s][e];
 	};
@@ -114,15 +119,16 @@ std::vector<Searcher::Response> Searcher::search_in(const Model::Codes& coarse_c
 	std::vector<i_d> distances(cluster_size);
 
 	// std::cout << "cluster_size: " << cluster_size << "\n";
-	printf("1. model.num_fine_splits, model.num_clusters: %d, %d\n", model.num_fine_splits, model.num_clusters);
+	printf("1. model.num_fine_splits, model.num_clusters: %d, %d\n", model.hu.num_fine_splits, model.hu.num_clusters);
 
 	// calculate relative distances for all vectors in cluster
 	scalar_t* distances_;
 	cudaMalloc((void**)&distances_, cluster_size * sizeof(scalar_t));
 	cudaMemset(distances_, 0, cluster_size * sizeof(scalar_t));
 
+	printf("1.1. malloc distances\n");
 	// all_distances<<<(cluster_size / 2 + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(model, x_, sz, coarse_code, cluster_size, index_codes_, distances_);
-	all_distances<<<1, 1>>>(model, x_, sz, coarse_code, cluster_size, index_codes_, &distances_[0]);
+	all_distances<<<1, 1>>>(model.cu, x_, sz, coarse_code, cluster_size, index_codes_, &distances_[0]);
 
 	auto ldistances = new scalar_t[cluster_size];
 	for (int i = 0; i < 4; ++i)

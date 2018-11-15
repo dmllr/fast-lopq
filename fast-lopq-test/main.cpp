@@ -93,26 +93,26 @@ int main(int argc, char **argv) {
 		-1.73925928e-02, -4.37456374e-03, -2.44480027e-02,  1.72845493e-03  };
 
 
-	std::cout << "1. Testing of: LOPQ Model\n";
-	std::cout << " * loading cpu model\n";
-	lopq::Model model;
-	model.load(model_path);
+	// std::cout << "1. Testing of: LOPQ Model\n";
+	// std::cout << " * loading cpu model\n";
+	// lopq::Model model;
+	// model.load(model_path);
 
-	auto coarse = model.predict_coarse(x);
+	// auto coarse = model.predict_coarse(x);
 
-	std::cout << "   - predicted coarse codes: ";
-	for (uint8_t i = 0; i < coarse.size(); ++i)
-		std::cout << std::hex << (int)coarse[i] << std::dec << ' ';
-	std::cout << '\n';
+	// std::cout << "   - predicted coarse codes: ";
+	// for (uint8_t i = 0; i < coarse.size(); ++i)
+	// 	std::cout << std::hex << (int)coarse[i] << std::dec << ' ';
+	// std::cout << '\n';
 
-	auto fine = model.predict_fine(x, coarse);
+	// auto fine = model.predict_fine(x, coarse);
 
-	std::cout << "    - predicted fine codes: ";
-	for (uint8_t i = 0; i < fine.size(); ++i)
-		std::cout << std::hex << (int)fine[i] << ' ';
-	std::cout << std::dec << '\n';
+	// std::cout << "    - predicted fine codes: ";
+	// for (uint8_t i = 0; i < fine.size(); ++i)
+	// 	std::cout << std::hex << (int)fine[i] << ' ';
+	// std::cout << std::dec << '\n';
 
-	auto sd = model.subquantizer_distances(x, coarse, 0);
+	// auto sd = model.subquantizer_distances(x, coarse, 0);
 
 	// std::cout << "    - subquantizer distances: " << sd.size() << "x" << sd[0].size();
 	// for (uint8_t i = 0; i < 4; ++i) {
