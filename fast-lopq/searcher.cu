@@ -15,49 +15,44 @@
 namespace lopq {
 namespace gpu {
 
-__device__
-scalar_t distance(const lopq::gpu::Model::Params* model, const scalar_t* x_, const size_t sz, const uint8_t* coarse_code_, const uint8_t* fine_code_) {
+__forceinline__ __device__
+scalar_t distance(const lopq::gpu::Model::Params& model, scalar_t* computing_, size_t ce_sz, const scalar_t* x_, const size_t sz, const uint8_t* coarse_code_, const uint8_t* fine_code_) {
 	scalar_t D = 0;
 
-	printf("11. model.num_fine_splits, model.num_clusters: %d, %d\n", model->num_fine_splits, model->num_clusters);
-
-	// scalar_t* d0_ = malloc(model.num_fine_splits * model.num_clusters * sizeof(scalar_t));
-	// auto d0_ = new scalar_t[model.num_fine_splits * model.num_clusters];
-	scalar_t d0_[8 * 256];
-	printf("malloc yes\n");
-	// model.subquantizer_distances_dododo(d0_, x_, sz, coarse_code.x, 0);
-	subquantizer_distances(model, d0_, x_, sz, coarse_code_, 0);
-	printf("subq yes\n");
+	// auto d0_ = (scalar_t*)malloc(model.num_fine_splits * model.num_clusters * sizeof(scalar_t));
+	auto d0_ = &computing_[0 * ce_sz];
+	subquantizer_distances(model, &computing_[0 * ce_sz], x_, sz, coarse_code_, 0);
 	auto d0s = 128;  // TODO replace 128
-	printf("d0 yes\n");
 
-	// printf("d1\n");
-	// scalar_t* d1_ = (scalar_t*)malloc(model.num_fine_splits * model.num_clusters * sizeof(scalar_t));
-	// lopq::gpu::subquantizer_distances(model, d1_, x_, sz, coarse_code.x, 1);
-	// printf("d1 yes\n");
+	__syncthreads();
 
-	// for (uint32_t i = 0; i < model.num_fine_splits; ++i) {
-	// 	auto& e = fine_code_[i];
-	// 	D += (i < d0s) ? d0_[i * model.num_clusters + e] : d1_[(i - d0s) * model.num_clusters + e];
-	// };
-	// printf("loop yes\n");
+	// auto d1_ = (scalar_t*)malloc(model.num_fine_splits * model.num_clusters * sizeof(scalar_t));
+	auto d1_ = &computing_[1 * ce_sz];
+	subquantizer_distances(model, &computing_[1 * ce_sz], x_, sz, coarse_code_, 1);
+
+	__syncthreads();
+
+	for (uint32_t i = 0; i < model.num_fine_splits; ++i) {
+		auto& e = fine_code_[i];
+		D += (i < d0s) ? d0_[i * model.num_clusters + e] : d1_[(i - d0s) * model.num_clusters + e];
+	};
+
+	__syncthreads();
 	
 	// free(d0_);
 	// free(d1_);
-	printf("free yes\n");
 
 	return D;
 }
 
 __global__
-void all_distances(const lopq::gpu::Model::Params* model, const scalar_t* x_, const size_t sz, const uint8_t* coarse_code_, const int n, const uint8_t* vectors_, scalar_t* distances_) {
-	printf("10. model.num_fine_splits, model.num_clusters: %d, %d\n", model->num_fine_splits, model->num_clusters);
-
+void all_distances(const lopq::gpu::Model::Params& model, scalar_t* computing_, size_t ce_sz, const scalar_t* x_, const size_t sz, const uint8_t* coarse_code_, const int n, const uint8_t* vectors_, scalar_t* distances_) {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 	int stride = blockDim.x * gridDim.x;
 	for (int i = idx; i < n; i += stride) {
 		auto fine_code_ = &vectors_[i * 16];  // TODO replace 16
-		distances_[i] = distance(model, x_, sz, coarse_code_, fine_code_);
+		distances_[i] = distance(model, &computing_[i * 2 * ce_sz], ce_sz, x_, sz, coarse_code_, fine_code_);
+		printf("%f\n", distances_[i]);
 	}
 }
 
@@ -113,21 +108,32 @@ std::vector<Searcher::Response> Searcher::search_in(const Model::Codes& coarse_c
 
 	std::vector<i_d> distances(cluster_size);
 
-	// std::cout << "cluster_size: " << cluster_size << "\n";
-	printf("1. model.num_fine_splits, model.num_clusters: %d, %d\n", model.hu.num_fine_splits, model.hu.num_clusters);
-	
 	uint8_t* coarse_code_;
 	cudaSafe(cudaMalloc((void**)&coarse_code_, coarse_code.size * sizeof(scalar_t)));
 	cudaSafe(cudaMemcpy(coarse_code_, coarse_code.x, coarse_code.size * sizeof(scalar_t), cudaMemcpyHostToDevice));
 
 	// calculate relative distances for all vectors in cluster
+
 	scalar_t* distances_;
 	cudaSafe(cudaMalloc((void**)&distances_, cluster_size * sizeof(scalar_t)));
 	cudaSafe(cudaMemset(distances_, 0, cluster_size * sizeof(scalar_t)));
 
-	printf("1.1. malloc distances\n");
-	// all_distances<<<(cluster_size / 2 + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(model, x_, sz, coarse_code_, cluster_size, index_codes_, distances_);
-	all_distances<<<1, 1>>>(model.cu, x_, sz, coarse_code_, cluster_size, index_codes_, distances_);
+	size_t computing_element_size = (
+		  model.hu.num_fine_splits * model.hu.num_clusters  // subquantizer_distances (in searcher:distance)
+		+ sz                                                // projection of x (in model:subquantizer_distances)
+		+ sz / model.hu.num_coarse_splits                   // resudual (in model:project)
+	);
+	size_t computing_size =
+		  cluster_size                                      // for each element in cluster
+		* 2                                                 // 1st and 2nd halves of subquantizer_distances
+		* computing_element_size;
+	scalar_t* computing_;
+	cudaSafe(cudaMalloc((void**)&computing_, computing_size * sizeof(scalar_t)));
+	cudaSafe(cudaMemset(computing_, 0, computing_size * sizeof(scalar_t)));
+
+	printf("Running `all_distances`\n");
+	all_distances<<<(cluster_size / 2 + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(*model.cu, computing_, computing_element_size, x_, sz, coarse_code_, cluster_size, index_codes_, distances_);
+	// all_distances<<<1, 1>>>(model.cu, x_, sz, coarse_code_, cluster_size, index_codes_, distances_);
 	cudaCheckError();
 
 	auto ldistances = new scalar_t[cluster_size];
@@ -164,6 +170,9 @@ std::vector<Searcher::Response> Searcher::search_in(const Model::Codes& coarse_c
 	for(int i = 0; i < 12; ++i) {
 		top.emplace_back(Response(index.ids[distances[i].first]));
 	}
+
+	cudaSafe(cudaFree(computing_));
+	cudaSafe(cudaFree(distances_));
 
 	return top;
 }

@@ -17,46 +17,6 @@
 #define BLOCK_SIZE 32
 
 
-namespace {
-
-void log1d(const std::string& name, scalar_t* x, int w) {
-	scalar_t* x_ = new scalar_t[w];
-	cudaMemcpy(x_, x, w * sizeof(scalar_t), cudaMemcpyDeviceToHost);
-
-	std::cout << name << "\n";
-	for (int i = 0; i < w; ++i) {
-		std::cout << x_[i] << ", ";
-		if ((i+1) % 5 == 0)
-			std::cout << '\n';
-	}
-	std::cout << '\n';
-
-	delete[] x_;
-}
-
-void log2d(const std::string& name, scalar_t* x_, int d) {
-	scalar_t* x = new scalar_t[256*64];
-	cudaMemcpy(x, x_, 256*64 * sizeof(scalar_t), cudaMemcpyDeviceToHost);
-
-//	std::cout << name << "\n";
-//	for (int i = 0; i < 4; ++i) {
-//		for (int j = 0; j < 4; ++j)
-//			std::cout << x[IDX(i, j, d)] << ", ";
-//		std::cout << '\n';
-//	}
-//	std::cout << '\n';
-
-
-	std::cout << name << " samples\n";
-	std::cout << 64 << "-" << 0 << ": " << x[IDX(64, 0, d)] << "\n";
-	std::cout << 64 << "-" << 1 << ": " << x[IDX(64, 1, d)] << "\n";
-
-	delete[] x;
-}
-
-} // namespace
-
-
 namespace lopq {
 namespace gpu {
 
@@ -71,7 +31,7 @@ void directions(const scalar_t* x_, const scalar_t* C_, uint8_t cszw, scalar_t* 
 __global__
 void residual(scalar_t* r_, const scalar_t* x_, uint8_t sz, const uint8_t cluster, const scalar_t* C_, const int csz, const scalar_t* mu_) {
 	auto i = threadIdx.x;
-	r_[i] = static_cast<scalar_t>(x_[i] - C_[IDX(cluster, i, csz)] - mu_[i]);
+	r_[i] = x_[i] - C_[IDX(cluster, i, csz)] - mu_[i];
 }
 
 __global__
@@ -83,7 +43,7 @@ void gemv(const scalar_t* __restrict__ A_, const scalar_t* __restrict__ x_, scal
 	scalar_t yv_ = 0.0;
 
 	#pragma unroll
-	for (unsigned int m = 0; m < ((w + BLOCK_SIZE - 1)/ BLOCK_SIZE); ++m) {
+	for (unsigned int m = 0; m < ((w + BLOCK_SIZE - 1) / BLOCK_SIZE); ++m) {
 		if ((m * BLOCK_SIZE + threadIdx.x) <  w)
 			shx_[threadIdx.x] = x_[threadIdx.x + m * BLOCK_SIZE];
 		else
@@ -108,36 +68,15 @@ void gemv(const scalar_t* __restrict__ A_, const scalar_t* __restrict__ x_, scal
 }
 
 __device__
-void project(const Model::Params* model, scalar_t* px_, const scalar_t* x_, const uint32_t sz, const uint8_t* coarse_code_) {
-	uint32_t split_size = sz / model->num_coarse_splits;
+void project(const Model::Params& model, scalar_t* px_, scalar_t* r_, const scalar_t* x_, const uint32_t sz, const uint8_t* coarse_code_) {
+	const auto split_size = sz / model.num_coarse_splits;
 
-	scalar_t* r_ = (scalar_t*)malloc(sz * sizeof(scalar_t));
-	for (uint32_t split = 0; split < model->num_coarse_splits; ++split) {
-		auto& cluster = coarse_code_[split];
+	for (uint32_t split = 0; split < model.num_coarse_splits; ++split) {
+		auto cluster = coarse_code_[split];
 
-		residual<<<1, split_size>>>(&r_[split * split_size], &x_[split * split_size], split_size, cluster, model->Cs[split], model->num_clusters, model->mus[split][cluster]);
+		residual<<<1, split_size>>>(r_, &x_[split * split_size], split_size, cluster, model.Cs[split], model.num_clusters, model.mus[split][cluster]);
 
-		// Can't use cublas[S,D]gemv here, cause of cublas_device library slows down *all* memset and memcpy operations
-
-		// const scalar_t alfa=1.0;
-		// const scalar_t beta=0.0;
-		// cublasgemv(model.handle, CUBLAS_OP_N, split_size, split_size, &alfa, model.Rs[split][cluster], split_size, &r_[split * split_size], 1, &beta, &px_[split * split_size], 1);
-
-		gemv<<<(split_size / 2 + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(model->Rs[split][cluster], &r_[split * split_size], &px_[split * split_size], split_size, split_size);
-	}
-
-	free(r_);
-}
-
-__device__
-void Model::project_dododo(scalar_t* px_, const scalar_t* x_, const uint32_t sz, const uint8_t* coarse_code) const {
-	uint32_t split_size = sz / cu->num_coarse_splits;
-
-	scalar_t* r_ = (scalar_t*)malloc(sz * sizeof(scalar_t));
-	for (uint32_t split = 0; split < cu->num_coarse_splits; ++split) {
-		auto& cluster = coarse_code[split];
-
-		residual<<<1, split_size>>>(&r_[split * split_size], &x_[split * split_size], split_size, cluster, cu->Cs[split], cu->num_clusters, cu->mus[split][cluster]);
+		__syncthreads();
 
 		// Can't use cublas[S,D]gemv here, cause of cublas_device library slows down *all* memset and memcpy operations
 
@@ -145,76 +84,54 @@ void Model::project_dododo(scalar_t* px_, const scalar_t* x_, const uint32_t sz,
 		// const scalar_t beta=0.0;
 		// cublasgemv(model.handle, CUBLAS_OP_N, split_size, split_size, &alfa, model.Rs[split][cluster], split_size, &r_[split * split_size], 1, &beta, &px_[split * split_size], 1);
 
-		gemv<<<(split_size / 2 + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(cu->Rs[split][cluster], &r_[split * split_size], &px_[split * split_size], split_size, split_size);
-	}
+		gemv<<<(split_size / 2 + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(model.Rs[split][cluster], r_, &px_[split * split_size], split_size, split_size);
 
-	free(r_);
-}
-
-__device__
-void Model::subquantizer_distances_dododo(scalar_t* distances_, const scalar_t* x_, const size_t sz, const uint8_t* coarse_code, const uint32_t split) const {
-	scalar_t* px_ = (scalar_t*)malloc(sz * sizeof(scalar_t));
-	memset(px_, 0.0, sz * sizeof(scalar_t));
-
-	project_dododo(px_, x_, sz, coarse_code);
-
-	uint32_t split_size = sz / cu->num_coarse_splits;
-
-	auto sx_ = &px_[split * split_size];  // size = split_size
-
-	uint32_t subsplit_size = split_size / cu->num_fine_splits;
-
-	// scalar_t* distances_ = (scalar_t*)malloc(model.num_fine_splits * model.num_clusters * sizeof(scalar_t));
-	memset(distances_, 0.0, cu->num_fine_splits * cu->num_clusters * sizeof(scalar_t));
-	
-	for (uint32_t subsplit = 0; subsplit < cu->num_fine_splits; ++subsplit) {
-		auto fx_ = &sx_[subsplit * subsplit_size];  // size = subsplit_size
-		auto ds_ = &distances_[subsplit * cu->num_clusters];
-
-		directions<<<1, cu->num_clusters>>>(fx_, cu->subquantizers[split][subsplit], subsplit_size, ds_);
+		__syncthreads();
 	}
 }
 
 __device__
-void subquantizer_distances(const Model::Params* model, scalar_t* distances_, const scalar_t* x_, const size_t sz, const uint8_t* coarse_code_, const uint32_t split) {
-	printf("here\n");
-	scalar_t* px_ = (scalar_t*)malloc(sz * sizeof(scalar_t));
-	memset(px_, 0.0, sz * sizeof(scalar_t));
-	printf("here memset\n");
+void subquantizer_distances(const Model::Params& model, scalar_t* computing_, const scalar_t* x_, const size_t sz, const uint8_t* coarse_code_, const uint32_t split) {
+	/*
+		computing_
+			distances_  // size = model.num_fine_splits * model.num_clusters
+			px_         // size = sz
+			resudual_   // size = sz / model.hu.num_coarse_splits
+	*/
 
-	project(model, px_, x_, sz, coarse_code_);
-	printf("here project\n");
+	scalar_t* distances_ = &computing_[0];
+	scalar_t* px_ = &computing_[model.num_fine_splits * model.num_clusters];
+	scalar_t* resudual_ = &computing_[model.num_fine_splits * model.num_clusters + sz];
 
-	uint32_t split_size = sz / model->num_coarse_splits;
+	// scalar_t* px_ = (scalar_t*)malloc(sz * sizeof(scalar_t));
+
+	project(model, px_, resudual_, x_, sz, coarse_code_);
+
+	uint32_t split_size = sz / model.num_coarse_splits;
 
 	auto sx_ = &px_[split * split_size];  // size = split_size
 
-	uint32_t subsplit_size = split_size / model->num_fine_splits;
+	uint32_t subsplit_size = split_size / model.num_fine_splits;
 
-	// scalar_t* distances_ = (scalar_t*)malloc(model.num_fine_splits * model.num_clusters * sizeof(scalar_t));
-	memset(distances_, 0.0, model->num_fine_splits * model->num_clusters * sizeof(scalar_t));
+	// memset(distances_, 0.0, model.num_fine_splits * model.num_clusters * sizeof(scalar_t));
 	
-	for (uint32_t subsplit = 0; subsplit < model->num_fine_splits; ++subsplit) {
+	for (uint32_t subsplit = 0; subsplit < model.num_fine_splits; ++subsplit) {
 		auto fx_ = &sx_[subsplit * subsplit_size];  // size = subsplit_size
-		auto ds_ = &distances_[subsplit * model->num_clusters];
+		auto ds_ = &distances_[subsplit * model.num_clusters];
 
-		directions<<<1, model->num_clusters>>>(fx_, model->subquantizers[split][subsplit], subsplit_size, ds_);
+		directions<<<1, model.num_clusters>>>(fx_, model.subquantizers[split][subsplit], subsplit_size, ds_);
+
+		__syncthreads();
 	}
+
+	__syncthreads();
+	
+	// free(px_);
 }
 
 
 Model::Model(cublasHandle_t handle) : handle(handle) {
 
-}
-
-__global__
-void t(const Model::Params* cu) {
-	if(threadIdx.x == 0) {
-		printf("3. cu->num_coarse_splits %d\n", cu->num_coarse_splits);
-		printf("4: ");
-		printf("cu->Cs[0][0] %f\n", cu->Cs[0][0]);
-		printf(".");
-	}
 }
 
 __global__
@@ -236,30 +153,26 @@ void cudaMallocModel(Model::Params* params, uint32_t num_coarse_splits, uint32_t
 	params->subquantizers = (scalar_t***)malloc(2 * sizeof(scalar_t**));
 	for (uint32_t sui = 0; sui < 2; ++sui)
 		params->subquantizers[sui] = (scalar_t**)malloc(num_fine_splits * sizeof(scalar_t*));
-	
-	printf("1. cu->num_coarse_splits %d\n", params->num_coarse_splits);
-	printf("1. cu->num_fine_splits %d\n", params->num_fine_splits);
-	printf("1. cu->num_clusters %d\n", params->num_clusters);
 }
 
 __global__
-void model_setC(Model::Params* cu, scalar_t* C_, uint32_t ci) {
-	cu->Cs[ci] = C_;
+void model_setC(Model::Params* cu, scalar_t* C_, uint32_t split) {
+	cu->Cs[split] = C_;
 }
 
 __global__
-void model_setR(Model::Params* cu, scalar_t* R_, uint32_t ri, uint32_t cluster) {
-	cu->Rs[ri][cluster] = R_;
+void model_setR(Model::Params* cu, scalar_t* R_, uint32_t split, uint32_t cluster) {
+	cu->Rs[split][cluster] = R_;
 }
 
 __global__
-void model_setMu(Model::Params* cu, scalar_t* mu_, uint32_t mui, uint32_t cluster) {
-	cu->Rs[mui][cluster] = mu_;
+void model_setMu(Model::Params* cu, scalar_t* mu_, uint32_t split, uint32_t cluster) {
+	cu->mus[split][cluster] = mu_;
 }
 
 __global__
-void model_setSubquantizer(Model::Params* cu, scalar_t* S_, uint32_t sui, uint32_t c) {
-	cu->subquantizers[sui][c] = S_;
+void model_setSubquantizer(Model::Params* cu, scalar_t* S_, uint32_t split, uint32_t c) {
+	cu->subquantizers[split][c] = S_;
 }
 
 void Model::load(const std::string& proto_path) {
@@ -277,7 +190,7 @@ void Model::load(const std::string& proto_path) {
 
 	//TODO Check for cuda/cublas response statuses
 
-	cudaMalloc((void**)&cu, sizeof(cu));
+	cudaMalloc((void**)&cu, sizeof(Params));
 	cudaMallocModel<<<1, 1>>>(cu, hu.num_coarse_splits, hu.num_fine_splits, hu.num_clusters);
 	cudaCheckError();
 
@@ -351,7 +264,7 @@ void Model::load(const std::string& proto_path) {
 		cudaMalloc((void**)&mu_, sz * sizeof(scalar_t));
 		cublasSetVector(sz, sizeof(scalar_t), muc, 1, mu_, 1);
 		
-		model_setR<<<1, 1>>>(cu, mu_, c / mus_half, c % mus_half);
+		model_setMu<<<1, 1>>>(cu, mu_, c / mus_half, c % mus_half);
 	}
 	cudaCheckError();
 
@@ -385,13 +298,6 @@ void Model::load(const std::string& proto_path) {
 	std::cout << '\n';
 
 	cudaThreadSynchronize();
-
-
-	// std::cout << '\n';
-	// printf("hu.num_coarse_splits %d\n", hu.num_coarse_splits);
-	// t<<<1, 1>>>(cu);
-	// cudaCheckError();
-	// std::cout << '\n';
 }
 
 Model::Codes Model::predict_coarse(const scalar_t* x_, const uint32_t sz) const {

@@ -23,14 +23,13 @@ typedef float scalar_t;
 namespace lopq {
 namespace gpu {
 
-__host__ __device__
 struct Model final {
 	Model(cublasHandle_t handle);
 
 	struct Params {
 		uint32_t num_coarse_splits = 2;
 		uint32_t num_fine_splits = 16;
-		uint32_t num_clusters = 0;
+		uint32_t num_clusters = 255;
 
 		scalar_t** Cs;
 		scalar_t*** Rs;
@@ -90,22 +89,16 @@ struct Model final {
 	Codes predict_fine(const scalar_t* x_, const uint32_t sz, const Codes& coarse_code) const;
 	SubquantizerDistances subquantizer_distances(const scalar_t* x_, const size_t sz, const Codes& coarse_code, uint32_t split) const;
 
-	__host__ __device__
-	void subquantizer_distances_dododo(scalar_t* distances_, const scalar_t* x_, const size_t sz, const uint8_t* coarse_code, const uint32_t split) const;
-
 private:
 	cublasHandle_t handle;
 	
 	uint8_t predict_cluster(const scalar_t* x, const uint32_t sz, const scalar_t* centroids, const uint32_t csz) const;
 	CUVector project(const scalar_t* x, const uint32_t sz, const Codes& coarse_code) const;
-
-	__host__ __device__
-	void project_dododo(scalar_t* px_, const scalar_t* x_, const uint32_t sz, const uint8_t* coarse_code) const;
 };
 
 
 __device__
-void subquantizer_distances(const Model::Params* model, scalar_t* distances_, const scalar_t* x_, const size_t sz, const uint8_t* coarse_code, const uint32_t split);
+void subquantizer_distances(const Model::Params& model, scalar_t* computing_, const scalar_t* x_, const size_t sz, const uint8_t* coarse_code, const uint32_t split);
 
 } // gpu
 } // lopq

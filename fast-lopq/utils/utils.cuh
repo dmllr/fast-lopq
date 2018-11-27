@@ -24,6 +24,7 @@ inline void __cudaCheckError(const char *file, const int line) {
 	}
 
 	err = cudaDeviceSynchronize();
+	
 	if(cudaSuccess != err) {
 		fprintf(stderr, "sync/cudaCheckError() failed at %s:%i : %s\n", file, line, cudaGetErrorString(err));
 		exit(-1);

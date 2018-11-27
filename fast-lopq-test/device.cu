@@ -37,7 +37,7 @@ struct Searcher_ final : public lopq::gpu::Searcher {
 			vectors.emplace_back(fine_code);
 		}
 		
-		std::cout << "    - to device\n";
+		std::cout << "    - to device: " << vectors.size() << " elements\n";
 		cudaMalloc((void**)&cluster.vectors, 16 * vectors.size() * sizeof(uint8_t));
 		uint32_t c = 0;
 		for (auto v : vectors) {
@@ -62,6 +62,8 @@ void t(const lopq::gpu::Model::Params& cu) {
 void test_(const std::string& proto_path, const std::string& index_path) {
 	cublasStatus_t stat;
 	cublasHandle_t handle;
+
+	cudaSetDevice(5);
 
 	stat = cublasCreate(&handle);
 	if (stat != CUBLAS_STATUS_SUCCESS) {
@@ -148,4 +150,5 @@ void test_(const std::string& proto_path, const std::string& index_path) {
 	// one_cell_of_index.reset();
 
 	cublasDestroy(handle);
+	cudaThreadSynchronize();
 }
