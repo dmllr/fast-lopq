@@ -31,7 +31,7 @@ float Searcher::distance(const Model::FeatureVector& x, blaze::StaticVector<uint
 	for (auto& e: fine_code) {
 		D += (c < d0s) ? d0[c][e] : d1[c - d0s][e];
 		c++;
-	};
+	}
 
 	return D;
 }
@@ -60,7 +60,7 @@ std::vector<Searcher::Response> Searcher::search_in(const Model::CoarseCode& coa
 	for (auto& e: distances) {
 		e.second = distance(x, coarse_code, index_codes[c], distance_cache);
 		e.first = c++;
-	};
+	}
 
 	// take top N
 	std::partial_sort(
@@ -72,10 +72,10 @@ std::vector<Searcher::Response> Searcher::search_in(const Model::CoarseCode& coa
 
 	std::vector<Response> top;
 
-	assert(quota < distances.size()&&  " in Searcher::search");
+	assert(quota < distances.size() && " in Searcher::search");
 	top.reserve(quota);
 	std::for_each(distances.begin(), std::next(distances.begin(), quota), [&](auto& e) {
-		assert(e.first < index.ids.size()&&  " in Searcher::search");
+		assert(e.first < index.ids.size() && " in Searcher::search");
 		top.emplace_back(Response(index.ids[e.first]));
 	});
 
