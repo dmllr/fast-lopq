@@ -99,7 +99,7 @@ int main(int argc, char **argv) {
 
 	auto coarse = model.predict_coarse(x);
 
-	std::cout << "   - predicted coarse codes: ";
+	std::cout << "    - predicted coarse codes: ";
 	for (uint8_t i = 0; i < coarse.size(); ++i)
 		std::cout << std::hex << (int)coarse[i] << ' ';
 	std::cout << '\n';
@@ -127,10 +127,10 @@ int main(int argc, char **argv) {
 	auto results = searcher.search(x);
 
 	auto t1 = std::chrono::steady_clock::now();
-	std::cout << "    - got result in " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << '\n';
+	std::cout << "    - got result in " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << " ms\n";
 
 	for (auto& r: results)
-		std::cout << "      - " << r.id << " ms\n";
+		std::cout << "      - " << r.id << '\n';
 
 	one_cell_of_index.reset();
 
