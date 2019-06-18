@@ -46,7 +46,7 @@ auto load_index(const std::string& index_path) {
 int main(int argc, char **argv) {
 	ArgsParser args(argc, argv);
 
-	const std::string &model_path = args.get("--model");
+	const std::string &model_path = args.get("--proto-path");
 	if (model_path.empty()) {
 		std::cout << "--proto-path: No model file specified.";
 		return EXIT_FAILURE;
