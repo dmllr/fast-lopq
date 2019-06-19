@@ -23,7 +23,7 @@ struct Searcher {
 			return *this;
 		}
 
-		uint32_t quota = 12;
+		size_t quota = 12;
 	};
 
 	Options& configure() {
@@ -31,7 +31,7 @@ struct Searcher {
 	}
 
 	struct Response final {
-		Response(std::string_view id)
+		explicit Response(std::string_view id)
 				: id(id) {
 		}
 
