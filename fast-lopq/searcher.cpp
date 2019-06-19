@@ -64,7 +64,7 @@ std::vector<Searcher::Response> Searcher::search_in(const Model::CoarseCode& coa
 
 	// take top N
 	std::partial_sort(
-			distances.begin(), distances.begin() + quota, distances.end(),
+			distances.begin(), distances.begin() + options.quota, distances.end(),
 			[](i_d i1, i_d i2) {
 				return i1.second < i2.second;
 			}
@@ -72,9 +72,9 @@ std::vector<Searcher::Response> Searcher::search_in(const Model::CoarseCode& coa
 
 	std::vector<Response> top;
 
-	assert(quota < distances.size() && " in Searcher::search");
-	top.reserve(quota);
-	std::for_each(distances.begin(), std::next(distances.begin(), quota), [&](auto& e) {
+	assert(options.quota < distances.size() && " in Searcher::search");
+	top.reserve(options.quota);
+	std::for_each(distances.begin(), std::next(distances.begin(), options.quota), [&](auto& e) {
 		assert(e.first < index.ids.size() && " in Searcher::search");
 		top.emplace_back(Response(index.ids[e.first]));
 	});

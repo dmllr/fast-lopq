@@ -12,12 +12,23 @@
 namespace lopq {
 
 struct Searcher {
-	static inline uint32_t quota = 12;
-
 	struct Cluster final {
 		std::vector<std::string> ids;
 		std::vector<Model::FineCode> vectors;
 	};
+
+	struct Options final {
+		Options& limit(uint32_t q) {
+			quota = q;
+			return *this;
+		}
+
+		uint32_t quota = 12;
+	};
+
+	Options& configure() {
+		return options;
+	}
 
 	struct Response final {
 		Response(std::string_view id)
@@ -38,6 +49,7 @@ protected:
 private:
 	Model model;
 	std::unordered_map<int, Cluster> clusters;
+	Options options;
 
 	using DistanceCache = std::unordered_map<int, blaze::DynamicVector<Model::FloatVector>>;
 
