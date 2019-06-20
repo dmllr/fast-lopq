@@ -12,19 +12,51 @@
 namespace lopq {
 
 struct Searcher {
-	static inline uint32_t quota = 12;
-
 	struct Cluster final {
 		std::vector<std::string> ids;
 		std::vector<Model::FineCode> vectors;
 	};
 
-	struct Response final {
-		Response(std::string_view id)
-				: id(id) {
+	struct Options final {
+		Options& limit(uint32_t q) {
+			quota = q;
+			return *this;
 		}
 
+		Options& deduplication() {
+			dedup = true;
+			return *this;
+		}
+
+		Options& no_deduplication() {
+			dedup = false;
+			return *this;
+		}
+
+		Options& deduplication(float threshold) {
+			this->dedup = true;
+			this->dedup_threshold = threshold;
+			return *this;
+		}
+
+		size_t quota = 12;
+		bool dedup = false;
+		float dedup_threshold = 0.0001;
+	};
+
+	Options& configure() {
+		return options;
+	}
+
+	struct Response final {
+		explicit Response(std::string_view id)
+			: id(id), distance(0) { }
+
+		explicit Response(std::string_view id, float distance)
+			: id(id), distance(distance) { }
+
 		std::string id;
+		float distance;
 	};
 
 	void load_model(const std::string& proto_path);
@@ -38,6 +70,7 @@ protected:
 private:
 	Model model;
 	std::unordered_map<int, Cluster> clusters;
+	Options options;
 
 	using DistanceCache = std::unordered_map<int, blaze::DynamicVector<Model::FloatVector>>;
 

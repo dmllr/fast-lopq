@@ -46,7 +46,7 @@ auto load_index(const std::string& index_path) {
 int main(int argc, char **argv) {
 	ArgsParser args(argc, argv);
 
-	const std::string &model_path = args.get("--model");
+	const std::string &model_path = args.get("--proto-path");
 	if (model_path.empty()) {
 		std::cout << "--proto-path: No model file specified.";
 		return EXIT_FAILURE;
@@ -99,7 +99,7 @@ int main(int argc, char **argv) {
 
 	auto coarse = model.predict_coarse(x);
 
-	std::cout << "   - predicted coarse codes: ";
+	std::cout << "    - predicted coarse codes: ";
 	for (uint8_t i = 0; i < coarse.size(); ++i)
 		std::cout << std::hex << (int)coarse[i] << ' ';
 	std::cout << '\n';
@@ -127,10 +127,10 @@ int main(int argc, char **argv) {
 	auto results = searcher.search(x);
 
 	auto t1 = std::chrono::steady_clock::now();
-	std::cout << "    - got result in " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << '\n';
+	std::cout << "    - got result in " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << " ms\n";
 
 	for (auto& r: results)
-		std::cout << "      - " << r.id << " ms\n";
+		std::cout << "      - " << r.id << '\n';
 
 	one_cell_of_index.reset();
 

@@ -5,6 +5,7 @@
 #include <fstream>
 #include <algorithm>
 #include <cassert>
+#include <functional>
 
 
 namespace lopq {
@@ -31,7 +32,7 @@ float Searcher::distance(const Model::FeatureVector& x, blaze::StaticVector<uint
 	for (auto& e: fine_code) {
 		D += (c < d0s) ? d0[c][e] : d1[c - d0s][e];
 		c++;
-	};
+	}
 
 	return D;
 }
@@ -52,6 +53,9 @@ std::vector<Searcher::Response> Searcher::search_in(const Model::CoarseCode& coa
 	DistanceCache distance_cache;
 
 	using i_d = std::pair<uint, float>;
+	std::function distance_comparator = [](i_d i1, i_d i2) {
+		return i1.second < i2.second;
+	};
 
 	std::vector<i_d> distances(index_codes.size());
 
@@ -60,24 +64,31 @@ std::vector<Searcher::Response> Searcher::search_in(const Model::CoarseCode& coa
 	for (auto& e: distances) {
 		e.second = distance(x, coarse_code, index_codes[c], distance_cache);
 		e.first = c++;
-	};
+	}
+
+	// sort top N is no filtering required, N*N otherwise
+	auto quota = std::min(index.ids.size(), (options.dedup ? options.quota * options.quota : options.quota));
+	auto begin = distances.begin();
+	auto end = begin + quota;
+	std::partial_sort(begin, end, distances.end(), distance_comparator);
+	// There is a possible issue, while using dense dataset (having too much duplicates).
+	// In this case `sort` instead of `partial_sort` should being used.
 
 	// take top N
-	std::partial_sort(
-			distances.begin(), distances.begin() + quota, distances.end(),
-			[](i_d i1, i_d i2) {
-				return i1.second < i2.second;
-			}
-	);
-
 	std::vector<Response> top;
-
-	assert(quota < distances.size()&&  " in Searcher::search");
-	top.reserve(quota);
-	std::for_each(distances.begin(), std::next(distances.begin(), quota), [&](auto& e) {
-		assert(e.first < index.ids.size()&&  " in Searcher::search");
-		top.emplace_back(Response(index.ids[e.first]));
-	});
+	top.reserve(options.quota);
+	quota = options.quota;
+	auto distance = 0.0f;
+	auto prev_distance = - options.dedup_threshold;
+	for (auto it = begin; quota > 0 && it != end; ++it) {
+		assert((*it).first < index.ids.size() && " in Searcher::search");
+		distance = (*it).second;
+		if (options.dedup && abs(distance - prev_distance) < options.dedup_threshold)
+			continue;
+		top.emplace_back(Response(index.ids[(*it).first], distance));
+		prev_distance = distance;
+		quota--;
+	}
 
 	return top;
 }
