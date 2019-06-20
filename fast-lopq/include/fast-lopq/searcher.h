@@ -23,7 +23,25 @@ struct Searcher {
 			return *this;
 		}
 
+		Options& deduplication() {
+			dedup = true;
+			return *this;
+		}
+
+		Options& no_deduplication() {
+			dedup = false;
+			return *this;
+		}
+
+		Options& deduplication(float threshold) {
+			this->dedup = true;
+			this->dedup_threshold = threshold;
+			return *this;
+		}
+
 		size_t quota = 12;
+		bool dedup = false;
+		float dedup_threshold = 0.0001;
 	};
 
 	Options& configure() {
@@ -32,10 +50,13 @@ struct Searcher {
 
 	struct Response final {
 		explicit Response(std::string_view id)
-				: id(id) {
-		}
+			: id(id), distance(0) { }
+
+		explicit Response(std::string_view id, float distance)
+			: id(id), distance(distance) { }
 
 		std::string id;
+		float distance;
 	};
 
 	void load_model(const std::string& proto_path);
