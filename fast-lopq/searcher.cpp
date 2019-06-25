@@ -78,14 +78,18 @@ std::vector<Searcher::Response> Searcher::search_in(const Model::CoarseCode& coa
 	std::vector<Response> top;
 	top.reserve(options.quota);
 	quota = options.quota;
+	auto i = size_t();
 	auto distance = 0.0f;
 	auto prev_distance = - options.dedup_threshold;
 	for (auto it = begin; quota > 0 && it != end; ++it) {
-		assert((*it).first < index.ids.size() && " in Searcher::search");
+		i = (*it).first;
 		distance = (*it).second;
+		assert(i < index.ids.size() && " in Searcher::search");
 		if (options.dedup && abs(distance - prev_distance) < options.dedup_threshold)
 			continue;
-		top.emplace_back(Response(index.ids[(*it).first], distance));
+		if (options.filtering && !options.filtering_function(index.ids[i], index.metadata[i]))
+			continue;
+		top.emplace_back(Response(index.ids[i], distance));
 		prev_distance = distance;
 		quota--;
 	}

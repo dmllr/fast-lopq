@@ -2,6 +2,7 @@
 #include <iostream>
 #include <fstream>
 #include <chrono>
+#include <functional>
 
 #include <blaze/Math.h>
 #include <fast-lopq/model.h>
@@ -37,9 +38,23 @@ auto load_index(const std::string& index_path) {
 
 		cluster->ids.emplace_back(id);
 		cluster->vectors.emplace_back(fine_code);
+		cluster->metadata.emplace_back(std::to_string(std::rand() % 10));
 	}
 
 	return cluster;
+}
+
+auto test(const std::function<std::vector<Searcher::Response>()>& runnable) {
+	std::cout << " * searching...\n";
+	auto t0 = std::chrono::steady_clock::now();
+
+	auto results = runnable();
+
+	auto t1 = std::chrono::steady_clock::now();
+	std::cout << "    - got result in " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << " ms\n";
+
+	for (auto& r: results)
+		std::cout << "      - " << r.id << ' ' << r.distance << '\n';
 }
 
 
@@ -89,7 +104,8 @@ int main(int argc, char **argv) {
 		 2.45707354e-02, -4.56435310e-02, -8.08994246e-04,  2.17876313e-02,
 		 9.91254619e-03, -2.55167447e-02, -1.00904512e-02,  9.45845237e-03,
 		 1.59078274e-02,  2.81953542e-03,  1.39462522e-02,  1.37137151e-03,
-		-1.73925928e-02, -4.37456374e-03, -2.44480027e-02,  1.72845493e-03  };
+		-1.73925928e-02, -4.37456374e-03, -2.44480027e-02,  1.72845493e-03
+	};
 
 
 	std::cout << "1. Testing of: LOPQ Model\n";
@@ -120,17 +136,46 @@ int main(int argc, char **argv) {
 	std::cout << " * loading model\n";
 	searcher.load_model(model_path);
 
+	test([&]() {
+		searcher
+			.configure()
+			.limit(13);
 
-	std::cout << " * searching...\n";
-	auto t0 = std::chrono::steady_clock::now();
+		return searcher.search(x);
+	});
 
-	auto results = searcher.search(x);
+	test([&]() {
+		searcher
+			.configure()
+			.limit(13)
+			.deduplication();
 
-	auto t1 = std::chrono::steady_clock::now();
-	std::cout << "    - got result in " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << " ms\n";
+		return searcher.search(x);
+	});
 
-	for (auto& r: results)
-		std::cout << "      - " << r.id << '\n';
+	test([&]() {
+		searcher
+			.configure()
+			.limit(13)
+			.deduplication()
+			.filter([](auto& /*id*/, auto& meta) {
+				return meta == "3";
+			});
+
+		return searcher.search(x);
+	});
+
+	test([&]() {
+		searcher
+			.configure()
+			.limit(13)
+			.deduplication()
+			.filter([](auto& /*id*/, auto& /*meta*/) {
+				return false;
+			});
+
+		return searcher.search(x);
+	});
 
 	one_cell_of_index.reset();
 
