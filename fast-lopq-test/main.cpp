@@ -38,6 +38,7 @@ auto load_index(const std::string& index_path) {
 
 		cluster->ids.emplace_back(id);
 		cluster->vectors.emplace_back(fine_code);
+		cluster->metadata.emplace_back(std::to_string(std::rand() % 10));
 	}
 
 	return cluster;
@@ -148,6 +149,30 @@ int main(int argc, char **argv) {
 			.configure()
 			.limit(13)
 			.deduplication();
+
+		return searcher.search(x);
+	});
+
+	test([&]() {
+		searcher
+			.configure()
+			.limit(13)
+			.deduplication()
+			.filter([](auto& /*id*/, auto& meta) {
+				return meta == "3";
+			});
+
+		return searcher.search(x);
+	});
+
+	test([&]() {
+		searcher
+			.configure()
+			.limit(13)
+			.deduplication()
+			.filter([](auto& /*id*/, auto& /*meta*/) {
+				return false;
+			});
 
 		return searcher.search(x);
 	});
