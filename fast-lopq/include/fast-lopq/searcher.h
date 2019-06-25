@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <blaze/Math.h>
 #include <unordered_map>
+#include <functional>
 
 
 namespace lopq {
@@ -15,9 +16,12 @@ struct Searcher {
 	struct Cluster final {
 		std::vector<std::string> ids;
 		std::vector<Model::FineCode> vectors;
+		std::vector<std::string> metadata;
 	};
 
 	struct Options final {
+		using FilteringFunction = std::function<bool(const std::string& id, const std::string& meta)>;
+
 		Options& limit(uint32_t q) {
 			quota = q;
 			return *this;
@@ -39,9 +43,17 @@ struct Searcher {
 			return *this;
 		}
 
+		Options& filter(const FilteringFunction& f_runnable) {
+			filtering = true;
+			filtering_function = f_runnable;
+			return *this;
+		}
+
 		size_t quota = 12;
 		bool dedup = false;
 		float dedup_threshold = 0.0001;
+		bool filtering = false;
+		FilteringFunction filtering_function;
 	};
 
 	Options& configure() {
