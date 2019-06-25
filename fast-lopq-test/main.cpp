@@ -2,6 +2,7 @@
 #include <iostream>
 #include <fstream>
 #include <chrono>
+#include <functional>
 
 #include <blaze/Math.h>
 #include <fast-lopq/model.h>
@@ -40,6 +41,19 @@ auto load_index(const std::string& index_path) {
 	}
 
 	return cluster;
+}
+
+auto test(const std::function<std::vector<Searcher::Response>()>& runnable) {
+	std::cout << " * searching...\n";
+	auto t0 = std::chrono::steady_clock::now();
+
+	auto results = runnable();
+
+	auto t1 = std::chrono::steady_clock::now();
+	std::cout << "    - got result in " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << " ms\n";
+
+	for (auto& r: results)
+		std::cout << "      - " << r.id << ' ' << r.distance << '\n';
 }
 
 
@@ -121,17 +135,22 @@ int main(int argc, char **argv) {
 	std::cout << " * loading model\n";
 	searcher.load_model(model_path);
 
+	test([&]() {
+		searcher
+			.configure()
+			.limit(13);
 
-	std::cout << " * searching...\n";
-	auto t0 = std::chrono::steady_clock::now();
+		return searcher.search(x);
+	});
 
-	auto results = searcher.search(x);
+	test([&]() {
+		searcher
+			.configure()
+			.limit(13)
+			.deduplication();
 
-	auto t1 = std::chrono::steady_clock::now();
-	std::cout << "    - got result in " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << " ms\n";
-
-	for (auto& r: results)
-		std::cout << "      - " << r.id << '\n';
+		return searcher.search(x);
+	});
 
 	one_cell_of_index.reset();
 
