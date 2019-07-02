@@ -1,3 +1,5 @@
+#include <utility>
+
 #pragma once
 
 #include "model.h"
@@ -61,11 +63,11 @@ struct Searcher {
 	}
 
 	struct Response final {
-		explicit Response(std::string_view id)
-			: id(id), distance(0) { }
+		explicit Response(std::string id)
+			: id(std::move(id)), distance(0) { }
 
-		explicit Response(std::string_view id, float distance)
-			: id(id), distance(distance) { }
+		explicit Response(std::string id, float distance)
+			: id(std::move(id)), distance(distance) { }
 
 		std::string id;
 		float distance;

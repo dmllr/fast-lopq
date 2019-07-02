@@ -28,7 +28,7 @@ float Searcher::distance(const Model::FeatureVector& x, blaze::StaticVector<uint
 	if (d1.size() == 0)
 		d1 = model.subquantizer_distances(x, coarse_code, 1);
 
-	uint32_t c = 0;
+	auto c = size_t(0);
 	for (auto& e: fine_code) {
 		D += (c < d0s) ? d0[c][e] : d1[c - d0s][e];
 		c++;
@@ -50,17 +50,17 @@ std::vector<Searcher::Response> Searcher::search_in(const Model::CoarseCode& coa
 	if (index_codes.empty())
 		return std::vector<Response>();
 
-	DistanceCache distance_cache;
+	auto distance_cache = DistanceCache();
 
 	using i_d = std::pair<uint, float>;
-	std::function distance_comparator = [](i_d i1, i_d i2) {
+	auto distance_comparator = [](i_d i1, i_d i2) {
 		return i1.second < i2.second;
 	};
 
-	std::vector<i_d> distances(index_codes.size());
+	auto distances = std::vector<i_d>(index_codes.size());
 
 	// calculate relative distances for all vectors in cluster
-	uint32_t c = 0;
+	auto c = size_t(0);
 	for (auto& e: distances) {
 		e.second = distance(x, coarse_code, index_codes[c], distance_cache);
 		e.first = c++;
@@ -75,7 +75,7 @@ std::vector<Searcher::Response> Searcher::search_in(const Model::CoarseCode& coa
 	// In this case `sort` instead of `partial_sort` should being used.
 
 	// take top N
-	std::vector<Response> top;
+	auto top = std::vector<Response>();
 	top.reserve(options.quota);
 	quota = options.quota;
 	auto i = size_t();
