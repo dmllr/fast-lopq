@@ -147,6 +147,25 @@ int main(int argc, char **argv) {
 	test([&]() {
 		searcher
 			.configure()
+			.start(2)
+			.limit(13);
+
+		return searcher.search(x);
+	});
+
+	test([&]() {
+		searcher
+			.configure()
+			.limit(13)
+			.deduplication();
+
+		return searcher.search(x);
+	});
+
+	test([&]() {
+		searcher
+			.configure()
+			.start(2)
 			.limit(13)
 			.deduplication();
 
