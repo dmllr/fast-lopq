@@ -1,11 +1,8 @@
 #include "include/fast-lopq/searcher.h"
 
-#include <cmath>
-#include <numeric>
 #include <fstream>
 #include <algorithm>
 #include <cassert>
-#include <functional>
 
 
 namespace lopq {
