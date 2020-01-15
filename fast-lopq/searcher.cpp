@@ -67,7 +67,7 @@ std::vector<Searcher::Response> Searcher::search_in(const Model::CoarseCode& coa
 	}
 
 	// sort top N is no filtering required, N*N otherwise
-	auto quota = std::min(index.ids.size(), (options.dedup ? options.quota * options.quota : options.quota));
+	auto quota = std::min(index.ids.size(), (options.dedup ? (options.offset + options.quota) * options.quota : options.offset + options.quota));
 	auto begin = distances.begin();
 	auto end = begin + quota;
 	std::partial_sort(begin, end, distances.end(), distance_comparator);
@@ -81,6 +81,7 @@ std::vector<Searcher::Response> Searcher::search_in(const Model::CoarseCode& coa
 	auto i = size_t();
 	auto distance = 0.0f;
 	auto prev_distance = - options.dedup_threshold;
+	auto offset = options.offset;
 	for (auto it = begin; quota > 0 && it != end; ++it) {
 		i = (*it).first;
 		distance = (*it).second;
@@ -89,6 +90,12 @@ std::vector<Searcher::Response> Searcher::search_in(const Model::CoarseCode& coa
 			continue;
 		if (options.filtering && !options.filtering_function(index.ids[i], index.metadata[i]))
 			continue;
+		if (offset > 0) {
+			offset--;
+			prev_distance = distance;
+			continue;
+		}
+
 		top.emplace_back(Response(index.ids[i], distance));
 		prev_distance = distance;
 		quota--;
