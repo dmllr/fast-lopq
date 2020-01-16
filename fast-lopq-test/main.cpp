@@ -137,6 +137,7 @@ int main(int argc, char **argv) {
 	searcher.load_model(model_path);
 
 	test([&]() {
+		std::cout << "   : .limit(13)\n";
 		searcher
 			.configure()
 			.limit(13);
@@ -145,6 +146,17 @@ int main(int argc, char **argv) {
 	});
 
 	test([&]() {
+		std::cout << "   : .start(2).limit(13)\n";
+		searcher
+			.configure()
+			.start(2)
+			.limit(13);
+
+		return searcher.search(x);
+	});
+
+	test([&]() {
+		std::cout << "   : .limit(13).deduplication()\n";
 		searcher
 			.configure()
 			.limit(13)
@@ -154,6 +166,18 @@ int main(int argc, char **argv) {
 	});
 
 	test([&]() {
+		std::cout << "   : .start(2).limit(13).deduplication()\n";
+		searcher
+			.configure()
+			.start(2)
+			.limit(13)
+			.deduplication();
+
+		return searcher.search(x);
+	});
+
+	test([&]() {
+		std::cout << "   : limit(13).deduplication().filter(meta == '3')\n";
 		searcher
 			.configure()
 			.limit(13)
@@ -166,6 +190,7 @@ int main(int argc, char **argv) {
 	});
 
 	test([&]() {
+		std::cout << "   : limit(13).deduplication().filter(false)\n";
 		searcher
 			.configure()
 			.limit(13)

@@ -24,6 +24,11 @@ struct Searcher {
 	struct Options final {
 		using FilteringFunction = std::function<bool(const std::string& id, const std::string& meta)>;
 
+		Options& start(uint32_t s) {
+			offset = s;
+			return *this;
+		}
+
 		Options& limit(uint32_t q) {
 			quota = q;
 			return *this;
@@ -51,6 +56,7 @@ struct Searcher {
 			return *this;
 		}
 
+		size_t offset = 0;
 		size_t quota = 12;
 		bool dedup = false;
 		float dedup_threshold = 0.0001;
