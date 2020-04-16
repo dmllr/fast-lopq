@@ -17,7 +17,7 @@ add_custom_command(
 )
 
 target_link_libraries(fast-lopq
-    ext-blaze
+    Blaze
     libprotobuf
 )
 

@@ -3,7 +3,7 @@
 #include <map>
 #include <string>
 #include <cstdint>
-#include "../../../ext/blaze/blaze/Math.h"
+#include <blaze/Math.h>
 
 
 namespace lopq {
