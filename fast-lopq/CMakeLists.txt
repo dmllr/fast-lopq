@@ -1,5 +1,5 @@
 add_library(fast-lopq
-    "${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/lopq_model.pb.cc"
+    "${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/lopq_model.pb.cc"  # build-time generated
 
     model.cpp
     searcher.cpp
