@@ -3,6 +3,7 @@
 #include <fstream>
 #include <algorithm>
 #include <cassert>
+#include <queue>
 
 
 namespace lopq {
@@ -49,54 +50,50 @@ std::vector<Searcher::Response> Searcher::search_in(const Model::CoarseCode& coa
 
 	auto distance_cache = DistanceCache();
 
-	using i_d = std::pair<uint, float>;
-	auto distance_comparator = [](i_d i1, i_d i2) {
-		return i1.second < i2.second;
-	};
+	using i_d = std::pair<float, uint>;
 
 	auto distances = std::vector<i_d>(index_codes.size());
 
 	// calculate relative distances for all vectors in cluster
 	auto c = size_t(0);
 	for (auto& e: distances) {
-		e.second = distance(x, coarse_code, index_codes[c], distance_cache);
-		e.first = c++;
+		e.first = distance(x, coarse_code, index_codes[c], distance_cache);
+		e.second = c++;
 	}
 
-	// sort top N is no filtering required, N*N otherwise
-	auto quota = std::min(index.ids.size(), (options.dedup ? (options.offset + options.quota) * options.quota : options.offset + options.quota));
-	auto begin = distances.begin();
-	auto end = begin + quota;
-	std::partial_sort(begin, end, distances.end(), distance_comparator);
-	// There is a possible issue, while using dense dataset (having too much duplicates).
-	// In this case `sort` instead of `partial_sort` should being used.
+    // priority queue for top results fetching
+	auto distance_queue = std::priority_queue<i_d, decltype(distances), std::greater<>>(std::greater<>(), std::move(distances));
 
-	// take top N
-	auto top = std::vector<Response>();
-	top.reserve(options.quota);
-	quota = options.quota;
-	auto i = size_t();
-	auto distance = 0.0f;
-	auto prev_distance = - options.dedup_threshold;
-	auto offset = options.offset;
-	for (auto it = begin; quota > 0 && it != end; ++it) {
-		i = (*it).first;
-		distance = (*it).second;
-		assert(i < index.ids.size() && " in Searcher::search");
-		if (options.dedup && abs(distance - prev_distance) < options.dedup_threshold)
-			continue;
-		if (options.filtering && !options.filtering_function(index.ids[i], index.metadata[i]))
-			continue;
-		if (offset > 0) {
-			offset--;
-			prev_distance = distance;
-			continue;
-		}
+    auto top = std::vector<Response>();
+    top.reserve(options.quota);
 
-		top.emplace_back(Response(index.ids[i], distance));
-		prev_distance = distance;
-		quota--;
-	}
+    auto offset = options.offset;
+    auto quota = std::min(index.ids.size() - options.offset, options.quota);
+    auto i = size_t();
+    auto distance = 0.0f;
+    auto prev_distance = -options.dedup_threshold;
+    while (!distance_queue.empty() && (quota + offset > 0)) {
+        auto& it = distance_queue.top();
+        distance = it.first;
+        i = it.second;
+        distance_queue.pop();
+
+        assert(i < index.ids.size() && " in Searcher::search");
+
+        if (options.dedup && abs(distance - prev_distance) < options.dedup_threshold)
+            continue;
+        if (options.filtering && !options.filtering_function(index.ids[i], index.metadata[i]))
+            continue;
+        if (offset > 0) {
+            offset--;
+            prev_distance = distance;
+            continue;
+        }
+
+        top.emplace_back(Response(index.ids[i], distance));
+        prev_distance = distance;
+        quota--;
+    }
 
 	return top;
 }
