@@ -18,6 +18,7 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 include(GNUInstallDirs)
 
+include("cmake/import_remote.cmake")
 include("cmake/ext-blaze.cmake")
 include("cmake/ext-protobuf.cmake")
 

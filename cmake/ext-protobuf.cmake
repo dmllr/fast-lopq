@@ -1,6 +1,8 @@
+import_remote("https://github.com/protocolbuffers/protobuf.git" TAG "v3.8.0" ALIAS protobuf_remote NO_CMAKE)
+
 find_package(Threads REQUIRED)
 add_definitions(-DHAVE_PTHREAD -DOPENSOURCE_PROTOBUF_CPP_BOOTSTRAP)
-set(protobuf_source_dir "ext/protobuf")
+set(protobuf_source_dir "${protobuf_remote_path}")
 
 add_library(libprotobuf STATIC
     ${protobuf_source_dir}/src/google/protobuf/any_lite.cc

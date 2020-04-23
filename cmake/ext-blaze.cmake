@@ -1,11 +1,13 @@
+import_remote("https://bitbucket.org/blaze-lib/blaze.git" TAG "v3.7" ALIAS blaze_remote NO_CMAKE)
+
 add_library(Blaze INTERFACE)
 
 target_include_directories(Blaze INTERFACE
-        $<BUILD_INTERFACE:${IMPORT_BLAZE_BLAZEROOT}>
-        $<INSTALL_INTERFACE:include>
-        ${CMAKE_CURRENT_SOURCE_DIR}/ext/blaze
-        GLOBAL
-        )
+    $<BUILD_INTERFACE:${IMPORT_BLAZE_BLAZEROOT}>
+    $<INSTALL_INTERFACE:include>
+    ${blaze_remote_path}
+    GLOBAL
+)
 
 target_compile_features(Blaze INTERFACE cxx_std_17)
 
