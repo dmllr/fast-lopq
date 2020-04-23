@@ -1,5 +1,5 @@
 add_library(fast-lopq
-    "${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/lopq_model.pb.cc"
+    "${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/lopq_model.pb.cc"  # build-time generated
 
     model.cpp
     searcher.cpp
@@ -10,14 +10,14 @@ add_library(fast-lopq
 
 add_custom_command(
     OUTPUT "${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/lopq_model.pb.cc"
-    COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}"
     COMMAND protoc -I ../proto --cpp_out="${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}" lopq_model.proto
     COMMENT "Run protoc to generate lopq model source in ${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 target_link_libraries(fast-lopq
-    ext-blaze
+    Blaze
     libprotobuf
 )
 
