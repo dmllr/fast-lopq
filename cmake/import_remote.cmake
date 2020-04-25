@@ -40,9 +40,9 @@ function(git_init destdir)
         message(FATAL_ERROR "The folder '${destdir}' already exists. Some manual cleanup may be required.")
     endif()
     execute_process(
-            COMMAND "${GIT_EXECUTABLE}" init "${destdir}"
-            RESULT_VARIABLE exitstatus ERROR_VARIABLE err
-            OUTPUT_QUIET
+        COMMAND "${GIT_EXECUTABLE}" init "${destdir}"
+        RESULT_VARIABLE exitstatus ERROR_VARIABLE err
+        OUTPUT_QUIET
     )
     if (NOT "${exitstatus}" EQUAL 0)
         message(FATAL_ERROR "failed to initialize empty git repository '${destdir}'\n${err}")
@@ -51,10 +51,10 @@ endfunction()
 
 function(git_add_remote destdir path)
     execute_process(
-            COMMAND "${GIT_EXECUTABLE}" remote add "origin" "${path}"
-            WORKING_DIRECTORY "${destdir}"
-            RESULT_VARIABLE exitstatus ERROR_VARIABLE err
-            OUTPUT_QUIET
+        COMMAND "${GIT_EXECUTABLE}" remote add "origin" "${path}"
+        WORKING_DIRECTORY "${destdir}"
+        RESULT_VARIABLE exitstatus ERROR_VARIABLE err
+        OUTPUT_QUIET
     )
     if (NOT "${exitstatus}" EQUAL 0)
         message(FATAL_ERROR "failed to add remote to '${path}'\n${err}")
@@ -63,10 +63,10 @@ endfunction()
 
 function(git_fetch destdir)
     execute_process(
-            COMMAND "${GIT_EXECUTABLE}" fetch --prune "origin"
-            WORKING_DIRECTORY "${destdir}"
-            RESULT_VARIABLE exitstatus ERROR_VARIABLE err
-            OUTPUT_QUIET
+        COMMAND "${GIT_EXECUTABLE}" fetch --prune "origin"
+        WORKING_DIRECTORY "${destdir}"
+        RESULT_VARIABLE exitstatus ERROR_VARIABLE err
+        OUTPUT_QUIET
     )
     if (NOT "${exitstatus}" EQUAL 0)
         message(FATAL_ERROR "failed to fetch 'origin' from '${destdir}'\n${err}")
@@ -75,10 +75,10 @@ endfunction()
 
 function(git_checkout destdir branch)
     execute_process(
-            COMMAND "${GIT_EXECUTABLE}" checkout "${branch}"
-            WORKING_DIRECTORY "${destdir}"
-            RESULT_VARIABLE exitstatus ERROR_VARIABLE err
-            OUTPUT_QUIET
+        COMMAND "${GIT_EXECUTABLE}" checkout "${branch}"
+        WORKING_DIRECTORY "${destdir}"
+        RESULT_VARIABLE exitstatus ERROR_VARIABLE err
+        OUTPUT_QUIET
     )
     if (NOT "${exitstatus}" EQUAL 0)
         message(FATAL_ERROR "failed to checkout branch or tag id '${branch}' from '${destdir}'\n${err}")
@@ -87,19 +87,19 @@ endfunction()
 
 function(git_submodule_update destdir)
     execute_process(
-            COMMAND "${GIT_EXECUTABLE}" submodule sync --recursive
-            WORKING_DIRECTORY "${destdir}"
-            RESULT_VARIABLE exitstatus ERROR_VARIABLE err
-            OUTPUT_QUIET
+        COMMAND "${GIT_EXECUTABLE}" submodule sync --recursive
+        WORKING_DIRECTORY "${destdir}"
+        RESULT_VARIABLE exitstatus ERROR_VARIABLE err
+        OUTPUT_QUIET
     )
     if (NOT "${exitstatus}" EQUAL 0)
         message(FATAL_ERROR "failed to submodule sync from '${destdir}'\n${err}")
     endif()
     execute_process(
-            COMMAND "${GIT_EXECUTABLE}" submodule update --init --recursive
-            WORKING_DIRECTORY "${destdir}"
-            RESULT_VARIABLE exitstatus ERROR_VARIABLE err
-            OUTPUT_QUIET
+        COMMAND "${GIT_EXECUTABLE}" submodule update --init --recursive
+        WORKING_DIRECTORY "${destdir}"
+        RESULT_VARIABLE exitstatus ERROR_VARIABLE err
+        OUTPUT_QUIET
     )
     if (NOT "${exitstatus}" EQUAL 0)
         message(FATAL_ERROR "failed to submodule update from '${destdir}'\n${err}")
